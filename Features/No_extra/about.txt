@@ -1,0 +1,5 @@
+module_name: no extra features
+module_tag: N/A
+reqs_inv_img: 0
+reqs_bg_snippet: 0
+feat_mode: append

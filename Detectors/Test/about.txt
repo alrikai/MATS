@@ -1,0 +1,2 @@
+module_name: Test Detector
+module_tag: TEST
