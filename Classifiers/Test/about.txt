@@ -1,3 +1,4 @@
 module_name: Test Classifier
 module_tag: TEST
 uses_feedback: 0
+multiclass: 0

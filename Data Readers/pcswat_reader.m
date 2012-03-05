@@ -64,6 +64,19 @@ else
 end
 p.sweetspot = [1, p.hf_cnum];
 
+%gt
+if isempty(gtf)
+    p.havegt = 0;
+    p.gtimage = [];
+else
+    p.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        p.gtimage = pcswat_gt_reader(fname_hi, p.side, gtf, TB_params.TB_HEAVY_TEXT);
+    else
+        p.gtimage = latlong_gt_reader(p, gtf);
+    end
+end
+
 if strcmpi(p.side,'PORT')
     s = [];
 elseif strcmpi(p.side,'STBD')

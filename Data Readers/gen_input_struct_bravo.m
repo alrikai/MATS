@@ -62,7 +62,7 @@ else
 end
 
 % sweet spot
-s.sweetspot = calc_sweetspot(s);
+s.sweetspot = [300 2180];%calc_sweetspot(s); %HARD CODE FOR SIG TEST ONLY (makes more contacts faster)
 
 if TB_params.TB_HEAVY_TEXT == 1
 % if 0 == 1

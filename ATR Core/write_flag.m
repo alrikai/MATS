@@ -5,7 +5,7 @@ function write_flag(filename, msg_on)
 if fid == -1
     fprintf(1, 'Error writing flag to ''%s'': %s\n',filename, msg);
 else
-%     fprintf(1, 'Flag ''%s'' written\n',filename);
+
 end
 fclose(fid);
 there = exist(filename, 'file') > 0;

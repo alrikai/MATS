@@ -1,4 +1,9 @@
 function perfout = perf_Test(input_struct)
 	
-perfout = [4.35 7.65 2.43;6 7 5];
+perfout.pdpc = [];
+perfout.pfa = [];
+perfout.A = 0;
+perfout.B = 0;
+perfout.py = [];
+perfout.ATRstatus = 'R';
 end

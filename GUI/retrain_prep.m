@@ -11,8 +11,10 @@ end
     'PromptString','Choose a classifier to retrain:',...
     'OKString','Retrain','ListSize',[150,300]);
 assert(ok == 1, 'Invalid classifier selection.');
-
+% Load classifier parameters from decription file
 c_params = update_cls_desc_params(TB_params, list{sel});
+multiclass = isfield(c_params,'multiclass') && (bin_equiv(c_params.multiclass) == 1);
+% Determine filename of training function
 retrain_folder = [TB_params.TB_ROOT,filesep,'Classifiers',filesep,...
     list{sel}];
 retrain_fname = ['trn_',list{sel},'.m'];
@@ -48,10 +50,16 @@ if isempty(varargin)
             skip_file = 1;
         end
         toc
-        if skip_file == 1
-        else            
-            labels = [labels, arrayfun(@(a) (a.gt),contacts)];
-            features = [features, cell2mat(arrayfun(@(a) ({a.features}),contacts))];
+        if skip_file == 0
+            if multiclass
+%                 labels = [labels, arrayfun(@(a) (a.type),contacts)];
+                labels = [labels, [contacts.type]];
+            else
+%                 labels = [labels, arrayfun(@(a) (a.gt),contacts)];
+                labels = [labels, [contacts.gt]];
+            end
+%             features = [features, cell2mat(arrayfun(@(a) ({a.features}),contacts))];
+            features = [features, [contacts.features]];
         end
         skip_file = 0;
         waitbar(k/length(file_list_io),hand,'Loading Features ... ');
@@ -68,7 +76,7 @@ else
     %%% ADD INTEGRITY CHECKING
     labels = varargin{1};
     assert(numel(labels) == length(labels), 'labels must be a vector.');
-    assert( sum(labels ~= 1 & labels ~= 0), 'labels must be 0 or 1.');
+    assert(sum(labels ~= 1 & labels ~= 0) == 0, 'labels must be 0 or 1.'); % may need to be tweaked for mutliclass case
     labels = labels(:)';
     features = varargin{2};
     assert(length(size(features)) == 2, 'features must be a matrix.');

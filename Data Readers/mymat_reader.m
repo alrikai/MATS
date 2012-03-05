@@ -10,11 +10,12 @@ function s = mymat_reader(fname_hi, fname_lo, port_or_stbd, gtf, TB_params)
 % OUTPUT:
 %   s = input structure for a side of data
 
-temp = fileparts(mfilename('fullpath'));
-newpath = [temp,filesep,'mymat'];
-if ~isdeployed
-addpath(newpath);
-end
+%%% Redundant
+% temp = fileparts(mfilename('fullpath'));
+% newpath = [temp,filesep,'mymat'];
+% if ~isdeployed
+% addpath(newpath);
+% end
 
 loaded_hi = myload(fname_hi);
 loaded_lo = myload(fname_lo);
@@ -44,14 +45,11 @@ end
 % lat/long
 s.lat  = loaded_hi.latitude;
 s.long = loaded_hi.longitude;
-s.heading = zeros(1,length(loaded_hi.latitude));
-% gt
-if isempty(gtf)
-    s.havegt = 0;
-    s.gtimage = [];
+if length(s.lat) > 1 && length(s.long) > 1
+    th = atan2( (s.long(end) - s.long(1)) , (s.lat(end) - s.lat(1)) );
+    s.heading = th; % approximate with track; does yaw actually == heading?
 else
-    s.havegt = 1;
-    s.gtimage = mymat_gt_reader(fname_hi, port_or_stbd, gtf, TB_params.TB_HEAVY_TEXT);
+    s.heading = zeros(1,length(loaded_hi.latitude));
 end
 % target type
 s.targettype = '???';
@@ -62,13 +60,29 @@ perf.height = loaded_hi.altitude;
 perf.minrange = 0;
 perf.maxrange = loaded_hi.Xs;
 s.perfparams = perf;
+
+s.time = loaded_hi.timeStamp; % not sure what this format is, but it is not correct!
+
 if TB_params.SKIP_PERF_EST == 1
     s.mode = 'A';
 else
     s.mode = 'B';
 end
 
-if ~isdeployed
-    rmpath(newpath);
+% gt
+if isempty(gtf)
+    s.havegt = 0;
+    s.gtimage = [];
+else
+    s.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        s.gtimage = mymat_gt_reader(fname_hi, port_or_stbd, gtf, TB_params.TB_HEAVY_TEXT);
+    elseif TB_params.GT_FORMAT == 2
+        s.gtimage = latlong_gt_reader(s, gtf);
+    end
 end
+
+% if ~isdeployed
+%     rmpath(newpath);
+% end
 end

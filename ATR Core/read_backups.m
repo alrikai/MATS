@@ -41,7 +41,6 @@ if length(locked) ~= num
     disp('Warning: Stored value of locked length does not match actual # of locked contacts.');
     disp([' From file = ',num2str(num),'; From list = ',num2str(length(locked))]);
     keyboard
-%     pause;
 end
 
 if show_details == 1
@@ -52,5 +51,4 @@ if show_details == 1
 end
 % combine lists
 c_list = [locked, unlocked];
-% keyboard
 end

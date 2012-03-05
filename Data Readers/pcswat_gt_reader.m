@@ -42,6 +42,7 @@ while 0==0 % scan all GT data
             gt.fn{i} = fn_i;
             gt.score(i) = 0;
             gt.side{i} = side_i;
+            gt.type(i) = -99; % FIX LATER
         end
     end
 end     % end while loop

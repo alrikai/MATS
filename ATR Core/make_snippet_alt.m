@@ -1,4 +1,4 @@
-function snippet = make_snippet_alt(x, y, snipwidth, snipheight, img)
+function [snippet, xbounds, ybounds] = make_snippet_alt(x, y, snipwidth, snipheight, img)
 % Extract a snippet from a given position.  Suspected targets are located
 % in the center of the snippet, unless the position is close to the edge of
 % the image, in which case the object shifts to avoid spilling over the
@@ -24,6 +24,8 @@ top = y - ceil(height_buff);
 bottom = y + floor(height_buff);
 
 % Extract snippet from image
+xbounds = [left,right];
+ybounds = [top,bottom];
 snippet = img(top:bottom, left:right);
 
 end

@@ -31,14 +31,6 @@ elseif strcmpi(channel, 'starboard')
     p.side = 'STBD';
 end
 
-if isempty(gtf)
-    p.havegt = 0;
-    p.gtimage = [];
-else
-    p.havegt = 1;
-    p.gtimage = nurc_gt_reader(fname, p.side, gtf, TB_params.TB_HEAVY_TEXT);
-end
-
 %Vehicle latitude, longitude, orientation, and targettype
 p.lat = latitude;
 p.long = longitude;
@@ -68,6 +60,19 @@ end
 p.sweetspot = calc_sweetspot(p);
 p.sweetspot = [1 p.sweetspot(2)]; % NURC cuts of the first 40m any way so the first calculation is not valid
 fclose('all');
+
+% gt
+if isempty(gtf)
+    p.havegt = 0;
+    p.gtimage = [];
+else
+    p.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        p.gtimage = nurc_gt_reader(fname, p.side, gtf, TB_params.TB_HEAVY_TEXT);
+    elseif TB_params.GT_FORMAT == 2
+        p.gtimage = latlong_gt_reader(p, gtf);
+    end
+end
 
 if strcmpi(p.side,'PORT')
     s = [];

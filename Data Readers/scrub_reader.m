@@ -78,18 +78,6 @@ p_struct.lat  = in_hi.Lat;
 p_struct.long = in_hi.Lon;
 s_struct.lat  = in_hi.Lat;
 s_struct.long = in_hi.Lon;
-% gt data
-if isempty(gtf)
-    p_struct.havegt = 0;
-    p_struct.gtimage = [];
-    s_struct.havegt = 0;
-    s_struct.gtimage = [];
-else
-    p_struct.havegt = 1;
-    p_struct.gtimage = scrub_gt_reader(fn, 'PORT', gtf, TB_params.TB_HEAVY_TEXT);
-    s_struct.havegt = 1;
-    s_struct.gtimage = scrub_gt_reader(fn, 'STBD', gtf, TB_params.TB_HEAVY_TEXT);
-end
 % target type
 p_struct.targettype = '???';
 s_struct.targettype = '???';
@@ -122,5 +110,22 @@ if TB_params.SKIP_PERF_EST == 1
 else
     p_struct.mode = 'B';
     s_struct.mode = 'B';
+end
+% gt data
+if isempty(gtf)
+    p_struct.havegt = 0;
+    p_struct.gtimage = [];
+    s_struct.havegt = 0;
+    s_struct.gtimage = [];
+else
+    p_struct.havegt = 1;
+    s_struct.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        p_struct.gtimage = scrub_gt_reader(fn, 'PORT', gtf, TB_params.TB_HEAVY_TEXT);
+        s_struct.gtimage = scrub_gt_reader(fn, 'STBD', gtf, TB_params.TB_HEAVY_TEXT);
+    elseif TB_params.GT_FORMAT == 2
+        p_struct.gtimage = latlong_gt_reader(p_struct, gtf);
+        s_struct.gtimage = latlong_gt_reader(s_struct, gtf);
+    end
 end
 end

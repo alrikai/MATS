@@ -14,7 +14,7 @@ function [perf_out, contacts] = atr_testbed_altfb(input_struct,...
 % Fields of structs are further specified in documentation.
 %
 % Derek Kolacinski, NSWC PC (derek.kolacinski@navy.mil)
-% Last update: 1 Sept 2011
+% Last update: 20 Dec 2011
 
 % Get testbed parameters (Default set will be used if optional
 % configuration struct not present.)
@@ -71,7 +71,7 @@ if isempty(input_struct) == 0   % if there is an image to process...
         addpath(TB_params.PRE_DET_RESULTS); % run even if deployed
         [junk, iofile] = fileparts(input_struct.fn);         %#ok<*ASGLU>
         pdr_fname = ['IO_',iofile,'_',upper(input_struct.side)];
-        new_contacts = load_old_results(pdr_fname);
+        [new_contacts, new_ecdata] = load_old_results(pdr_fname);
     else % Run detector as planned...
         % get detector function handle
         hdet = TB_params.DET_HANDLES{TB_params.DETECTOR};
@@ -82,7 +82,7 @@ if isempty(input_struct) == 0   % if there is an image to process...
         end
         % run detector
         fprintf(1,'Launching detector (%s)...\n',func2str(hdet));
-        new_contacts = hdet(input_struct);
+        [new_contacts, new_ecdata] = hdet(input_struct);
         if ~isdeployed
             % remove folders from path (to prevent overload conflicts)
             rmpath(det_paths);
@@ -101,6 +101,7 @@ if TB_params.TB_HEAVY_TEXT == 1
 end
 
 %%% 3.) OPTIONAL MODULES
+new_ofdata = struct([]); % optional field data
 %%% 3a.) LAUNCH INVERSE IMAGING
 if TB_params.INV_IMG_ON == 1
     if ~isdeployed
@@ -108,14 +109,14 @@ if TB_params.INV_IMG_ON == 1
         addpath(ii_paths);
     end
     if ~isempty(new_contacts)
-        if strcmp(new_contacts(1).sensor,'MUSCLE')
+        if strcmp(input_struct.sensor,'MUSCLE')
             TB_params.INV_IMG_MODES = {'hf'};
         end;
     end;
     for q = 1:length(TB_params.INV_IMG_MODES)
         fprintf(1, 'Launching inverse imaging module (%s)...\n',...
             TB_params.INV_IMG_MODES{q});
-        new_contacts = acprep(new_contacts, TB_params.INV_IMG_MODES{q});
+        new_ofdata = acprep(new_contacts, new_ecdata, new_ofdata, TB_params.INV_IMG_MODES{q});
     end
     if ~isdeployed
         rmpath(ii_paths);
@@ -127,7 +128,7 @@ end
 %%% 3b.) GET BACKGROUND SNIPPETS
 if TB_params.BG_SNIPPET_ON == 1
     for q = 1:length(new_contacts)
-        [new_contacts(q).bg_snippet, new_contacts(q).bg_offset] = ...
+        [new_ofdata(q).bg_snippet, new_ofdata(q).bg_offset] = ...
             make_bg_snippet(new_contacts(q).x, new_contacts(q).y, ...
             401, 401, input_struct.hf, new_contacts);
     end
@@ -144,7 +145,7 @@ if ~isdeployed
         filesep,temp(6:end)]);
     addpath(feat_paths);
 end
-new_contacts = hfeat(new_contacts);
+new_contacts = hfeat(new_contacts, new_ecdata, new_ofdata); % Keep 1 output b/c Feature module should only be writing to contacts.features.
 if ~isdeployed
     rmpath(feat_paths);
 end
@@ -153,7 +154,7 @@ timings = timing_sub(timings);
 
 % Sort contacts in 'chronological' order (i.e., in the manner of a
 % waterfall plot)
-new_contacts = sort_contacts(new_contacts);
+[new_contacts, new_ecdata] = sort_contacts(new_contacts, new_ecdata);
 
 if TB_params.TB_FEEDBACK_ON == 1
     %%% 5.) READ BACKUP
@@ -166,7 +167,6 @@ if TB_params.TB_FEEDBACK_ON == 1
     write_flag([TB_params.TB_ROOT,filesep,'bkup_atr_busy.flag'], TB_params.FLAG_MSGS_ON);
     % read locked and unlocked backup files
     prev_contacts = read_backups(TB_params.L_BKUP_PATH, TB_params.U_BKUP_PATH, TB_params.TB_HEAVY_TEXT); 
-%     prev_contacts = read_backup(TB_params);    
     % Load the index of the last locked contact during the prior run
     % (stored in first slot of backup file)
     lastlock_index_old = read_lock_index(TB_params.U_BKUP_PATH, TB_params.TB_HEAVY_TEXT);
@@ -220,9 +220,13 @@ else % TB_FEEDBACK_ON == 0
     % just use prev_contacts as it is
 end % end if TB_FEEDBACK_ON == 1...
 
-% add ID field to contacts
 for k = 1:length(new_contacts)
-    new_contacts(k).ID = length(prev_contacts) + k;
+    % add ID field to data structures
+    temp = length(prev_contacts) + k;
+    new_contacts(k).ID = temp;
+    new_ecdata(k).ID = temp;
+    % add filename strings to contacts
+    new_contacts(k).ecdata_fn = [TB_params.ECD_DIR,filesep,'contact_',num2str(temp),'.ecd'];
 end
 
 %%% 8.) CONCATENATE NEW CONTACTS ONTO CONTACT LIST
@@ -257,13 +261,11 @@ if isempty(contacts) == 0
     % Isaac's classifier doesn't need to run on contacts it has already
     % classified, so don't pass those into the classifier.
     hcls = TB_params.CLS_HANDLES{TB_params.CLASSIFIER};
-    if any( strcmp( func2str(hcls), {'cls_Isaacs','cls_Test'} ) ) == 1
-         % start where this image would begin (Note: if the detector
-         % returned no contacts, this will actually be length(contacts)+1
+    if any( strcmp( func2str(hcls), {'cls_Isaacs','cls_Test', 'cls_Test_multi'} ) ) == 1
+         % start where this image would begin
         first_index = new_img_ind;
     else
         first_index = 1;
-        
     end
     last_index = length(contacts);
     if ~isdeployed
@@ -292,13 +294,20 @@ if TB_params.TB_FEEDBACK_ON == 1
     % append newly locked contacts
     write_backups(contacts, lastlock_index_old, lastlock_index,...
         TB_params.L_BKUP_PATH, TB_params.U_BKUP_PATH, TB_params.TB_HEAVY_TEXT);
+    
     % Delete flag (blue)
     delete_flag([TB_params.TB_ROOT,filesep,'bkup_atr_busy.flag'], TB_params.FLAG_MSGS_ON);
     % Timing info
     timings = timing_sub(timings); %#ok<NASGU>
 end
 
-%%% 11.) UPDATE STOPLIGHT STATUS
+%%% 11.) WRITE EXTRA CONTACT DATA
+% DK: keep this outside of if-branch.  Otherwise, snippets etc. will no
+% longer be accessible unless MATS is running in feedback mode.
+write_all_ecdata(contacts, new_ecdata);
+write_all_ofdata(contacts, new_ofdata);
+
+%%% 12.) UPDATE STOPLIGHT STATUS
 if ~isempty(input_struct)
 num_mines = 0;
 for qq = 0:((new_img_ind-1)-1)
@@ -436,6 +445,7 @@ dispmod = 10; % This exists somewhere else too; maybe move to TB_params?
         % ...update opconf and opdisplay
         prev_contacts(k).opfeedback.opconf = update.data.opconf;
         prev_contacts(k).opfeedback.opdisplay = update.data.opdisplay;
+        prev_contacts(k).opfeedback.type = update.data.type; 
         if TB_params.TB_HEAVY_TEXT == 1
             fprintf(1,' Updating contact #%d (ID#%d) opconf to %d and opdisplay to %d\n',...
                 k, prev_contacts(k).ID, update.data.opconf, update.data.opdisplay);
@@ -497,62 +507,85 @@ if add.data.ID == prev_contacts(k).ID
 else
     % Create new contact
     new_cont = struct;
+    new_ecdata = struct;
     new_cont.ID          = add.data.ID;
+    new_ecdata.ID = add.data.ID;
     new_cont.x           = add.data.x;
     new_cont.y           = add.data.y;
     new_cont.fn          = add.data.fn;
     new_cont.side        = add.data.side;
-    new_cont.sensor      = add.data.sensor;
-    new_cont.detscore    = -99;
-    new_cont.hfsnippet   = add.data.hfsnippet;
-    new_cont.bbsnippet   = add.data.bbsnippet;
     new_cont.gt          = 1; % operator is basically ground truthing the data
-    new_cont.lat         = add.data.lat;
-    new_cont.long        = add.data.long;
+
     
-    new_cont.heading     = add.data.heading;
-    new_cont.time        = add.data.time;
-    new_cont.alt         = add.data.alt;
-    new_cont.hf_ares     = add.data.hf_ares;
-    new_cont.hf_cres     = add.data.hf_cres;
-    %%% New set of added fields
-    new_cont.hf_anum     = add.data.hf_anum;
-    new_cont.hf_cnum     = add.data.hf_cnum;
-    new_cont.bb_ares     = add.data.bb_ares;
-    new_cont.bb_cres     = add.data.bb_cres;
-    new_cont.bb_anum     = add.data.bb_anum;
-    new_cont.bb_cnum     = add.data.bb_cnum;
-    new_cont.veh_lats    = add.data.veh_lats;
-    new_cont.veh_longs   = add.data.veh_longs;
-    new_cont.veh_heights = add.data.veh_heights;
-    
-    new_cont.bg_snippet = add.data.bg_snippet;
-    new_cont.bg_offset = add.data.bg_offset;
-    %%%
-    new_cont.hfraw = add.data.hfraw;
-    new_cont.bbraw = add.data.bbraw;
-    new_cont.lb1raw = add.data.lb1raw;
-    new_cont.hfac = add.data.hfac;
-    new_cont.bbac = add.data.bbac;
-    new_cont.lb1ac = add.data.lb1ac;
+%%% ecdata fields
+    new_ecdata.sensor      = add.data.sensor;
+    new_ecdata.detscore    = -99;
+    new_ecdata.hfsnippet   = add.data.hfsnippet;
+    new_ecdata.bbsnippet   = add.data.bbsnippet;
+    new_ecdata.lf1snippet  = add.data.lf1snippet;
+    new_ecdata.lat         = add.data.lat;
+    new_ecdata.long        = add.data.long;
+    new_ecdata.heading     = add.data.heading;
+    new_ecdata.time        = add.data.time;
+    new_ecdata.alt         = add.data.alt;
+    new_ecdata.hf_ares     = add.data.hf_ares;
+    new_ecdata.hf_cres     = add.data.hf_cres;
+    new_ecdata.hf_anum     = add.data.hf_anum;
+    new_ecdata.hf_cnum     = add.data.hf_cnum;
+    new_ecdata.bb_ares     = add.data.bb_ares;
+    new_ecdata.bb_cres     = add.data.bb_cres;
+    new_ecdata.bb_anum     = add.data.bb_anum;
+    new_ecdata.bb_cnum     = add.data.bb_cnum;
+    new_ecdata.lf1_ares    = add.data.lf1_ares;
+    new_ecdata.lf1_cres    = add.data.lf1_cres;
+    new_ecdata.lf1_anum    = add.data.lf1_anum;
+    new_ecdata.lf1_cnum    = add.data.lf1_cnum;
+    new_ecdata.veh_lats    = add.data.veh_lats;
+    new_ecdata.veh_longs   = add.data.veh_longs;
+    new_ecdata.veh_heights = add.data.veh_heights;
+
+%%% Old optional fields
+%     new_cont.bg_snippet = add.data.bg_snippet;
+%     new_cont.bg_offset = add.data.bg_offset;
+%     new_cont.hfraw = add.data.hfraw;
+%     new_cont.bbraw = add.data.bbraw;
+%     new_cont.lb1raw = add.data.lb1raw;
+%     new_cont.hfac = add.data.hfac;
+%     new_cont.bbac = add.data.bbac;
+%     new_cont.lb1ac = add.data.lb1ac;
     
     new_cont.normalizer = add.data.normalizer;
     %%%
     
     new_cont.class       = -99;
+    new_cont.type        = -99;
     new_cont.classconf   = -99;
-    new_cont.groupnum    = -99;
-    new_cont.groupconf   = -99;
-    new_cont.grouplat    = -99;
-    new_cont.grouplong   = -99;
-    new_cont.groupcovmat = [];
+    new_ecdata.groupnum    = -99;
+    new_ecdata.groupconf   = -99;
+    new_ecdata.grouplat    = -99;
+    new_ecdata.grouplong   = -99;
+    new_ecdata.groupcovmat = [];
     new_cont.detector    = 'Manual';
     new_cont.featureset  = '';
     new_cont.classifier  = '';
     new_cont.contcorr    = '';
     new_cont.opfeedback.opdisplay  = add.data.opdisplay - dispmod;
     new_cont.opfeedback.opconf  = add.data.opconf;
-    new_cont = feature_snippet(new_cont);
+    new_cont.opfeedback.type  = add.data.type;
+    % DK: This prevents a feature mismatch, but we'll need to fill in the
+    % features properly later. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    if strcmpi( prev_contacts(1).detector, 'CCA' ) == 1 && ...
+            strcmpi( prev_contacts(1).classifier, 'JI1' ) == 1
+    new_cont.features = feature_snippet(new_ecdata.hfsnippet, new_ecdata.bbsnippet);
+    else
+        new_cont.features = [];
+    end
+    
+    % Write ecdata file
+    temp_fn = [TB_params.ECD_DIR,filesep,'contact_',num2str(new_cont.ID),'_man.ecd'];
+    write_extra_cdata(temp_fn, new_ecdata);
+    new_cont.ecdata_fn = temp_fn;
+    
     % Insert new contact into the at position k 
     prev_contacts = [prev_contacts(1:(k-1)), new_cont,...
         prev_contacts(k:end)];
@@ -606,6 +639,12 @@ function [params, ok, tim_dir] = get_params(ins, input_struct)
 % make default parameter set
 tbr = fileparts(mfilename('fullpath'));
 ok = 0;
+if length(ins) >=1 && isstruct(ins{1})
+    % first extra parameter is possibly valid TB_params structure
+    temp = ins{1};
+else
+    temp = [];
+end
 if length(ins) >= 2 && ischar(ins{2})
     tim_dir = ins{2};
 else
@@ -670,6 +709,16 @@ end
 % CLASS_DATA: index of classifier data file to be used from list
 %   CDATA_FILES
 % CDATA_FILES: list of valid data file names for the given classifier
+% SRC_DIR: folder contains the input data files (e.g., HDF5, .mat files)
+% OUT_DIR: folder in which the output files will be stored
+% ECD_DIR: folder in which the extra contact data will be stored.
+% Currently, this is set to be a subdirectory in .OUT_DIR called 'ecd'
+% TEMP_DIR: folder for storing temporary files (e.g., those saved by the
+% contact correlation algorithm)
+%
+% Note: GUI version also has several other fields, but those are not
+% relevant to the ATR processing.  These include:
+%   - BURIED_MODE, MULTICLASS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 params = struct('TB_HEAVY_TEXT', 0,...
     'DEBUG_MODE', 0,...
@@ -703,171 +752,136 @@ params = struct('TB_HEAVY_TEXT', 0,...
     'INV_IMG_MODES', {{}},...
     'BG_SNIPPET_ON', 0,...
     'CDATA_FILES', {{'data_bogus_default.mat'}},...
-    'CLASS_DATA', 1);
-% Defaults if no parameters passed in (i.e., for NSAM)
-if ~isempty(input_struct)
-switch input_struct.targettype % automatic D/C selection
-	case {'wedge','truncated cone','cylindrical','torpedo','sphere'}
-        % Use Isaac's features
-        % Choose appropriate class. data file
-        if strcmpi(input_struct.sensor, 'ONR SSAM')
-            params.CDATA_FILES = {'data_JI_SSAM1_default.mat'};
-        elseif any(strcmpi(input_struct.sensor, {'ONR SSAM2', 'MK 18 mod 2'}))
-            params.CDATA_FILES = {'data_JI_SSAM2_default.mat'};
-        else
-            error('Classifier not trained for sensor type ''%s''.',...
-                input_struct.sensor);
-        end
-    case {'preproc','???'}
-        % Not sure, use chosen gui files
-    otherwise
-        % Use SIG classifier
+    'CLASS_DATA', 1,...
+    'SRC_DIR','???',...
+    'OUT_DIR','???',...
+    'ECD_DIR','???',...
+    'TEMP_DIR','???');
+
+if isempty(temp)
+    % Defaults if no parameters passed in (i.e., for NSAM)
+    if ~isempty(input_struct)
+    switch input_struct.targettype % automatic D/C selection
+        case {'wedge','truncated cone','cylindrical','torpedo','sphere'}
+            % Use Isaac's features
+            % Choose appropriate class. data file
+            if strcmpi(input_struct.sensor, 'ONR SSAM')
+                params.CDATA_FILES = {'data_JI_SSAM1_default.mat'};
+            elseif any(strcmpi(input_struct.sensor, {'ONR SSAM2', 'MK 18 mod 2'}))
+                params.CDATA_FILES = {'data_JI_SSAM2_default.mat'};
+            else
+                error('Classifier not trained for sensor type ''%s''.',...
+                    input_struct.sensor);
+            end
+        case {'preproc','???'}
+            % Not sure, use chosen gui files
+        otherwise
+            % Use SIG classifier
+            params.TB_FEEDBACK_ON = 1;
+            params.CLASSIFIER = 2;
+            % Choose appropriate class. data file (NO DATA FILE FOR SSAM II)
+            if strcmpi(input_struct.sensor, 'ONR SSAM')
+                params.CDATA_FILES = {'data_SIGdefault.mat'};
+            else
+                error('Classifier not trained for sensor type ''%s''.',...
+                    input_struct.sensor);
+            end
+    end
+    else % classifier retrain
         params.TB_FEEDBACK_ON = 1;
         params.CLASSIFIER = 2;
-        % Choose appropriate class. data file (NO DATA FILE FOR SSAM II)
-        if strcmpi(input_struct.sensor, 'ONR SSAM')
-            params.CDATA_FILES = {'data_SIGdefault.mat'};
-        else
-            error('Classifier not trained for sensor type ''%s''.',...
-                input_struct.sensor);
-        end
-end
-else % classifier retrain
-    params.TB_FEEDBACK_ON = 1;
-    params.CLASSIFIER = 2;
-    params.CDATA_FILES = {'data_SIGdefault.mat'};
-end
+        params.CDATA_FILES = {'data_SIGdefault.mat'};
+    end
+else
+    try
+        % Params have been passed in.  Copy valid values into 'params'.
+        params = copy_valid_int_field(temp,params,'TB_HEAVY_TEXT',0:1);
+        params = copy_valid_int_field(temp,params,'DEBUG_MODE',0:1);
+        params = copy_valid_int_field(temp,params,'FLAG_MSGS_ON',0:1);
+        params = copy_valid_int_field(temp,params,'MAN_ATR_SEL',0:1);
+        if params.MAN_ATR_SEL == 1 % manual D/C selection
+            params = copy_valid_indvec_field(temp,params,'DETECTOR','DET_HANDLES');
+            params = copy_valid_indvec_field(temp,params,'CLASSIFIER','CLS_HANDLES');
+            params = copy_valid_indvec_field(temp,params,'FEATURES','FEAT_HANDLES');
+            params = copy_valid_indvec_field(temp,params,'CLASS_DATA','CDATA_FILES');
+            params = copy_valid_int_field(temp, params, 'INV_IMG_ON', 0:1);
+            if isfield(temp,'INV_IMG_MODES') && iscell(temp.INV_IMG_MODES)
+                params.INV_IMG_MODES = temp.INV_IMG_MODES;
+            end
+            params = copy_valid_int_field(temp, params, 'BG_SNIPPET_ON', 0:1);
 
-try
-    % take only the first extra parameter
-    temp = ins{1};
-    if temp.TB_HEAVY_TEXT == 0 || temp.TB_HEAVY_TEXT == 1
-        params.TB_HEAVY_TEXT = temp.TB_HEAVY_TEXT;
-    end
-    if temp.DEBUG_MODE == 0 || temp.DEBUG_MODE == 1
-        params.DEBUG_MODE = temp.DEBUG_MODE;
-    end
-    if temp.FLAG_MSGS_ON == 0 || temp.FLAG_MSGS_ON == 1
-        params.FLAG_MSGS_ON = temp.FLAG_MSGS_ON;
-    end
-    if temp.MAN_ATR_SEL == 0 || temp.MAN_ATR_SEL == 1
-        params.MAN_ATR_SEL = temp.MAN_ATR_SEL;
-    end
-    if params.MAN_ATR_SEL == 1 % manual D/C selection
-        if sum( temp.DETECTOR == 1:length(temp.DET_HANDLES) ) > 0
-            params.DETECTOR = temp.DETECTOR;
-            params.DET_HANDLES = temp.DET_HANDLES;
+        else                        % automatic D/C selection
+            switch input_struct.targettype
+                case {'wedge','truncated cone','cylindrical','torpedo','sphere'}
+                    params.DETECTOR = 1;
+                    params.CLASSIFIER = 1;
+                    params.FEATURES = 1;
+                    if strcmpi(input_struct.sensor, 'ONR SSAM')
+                        params.CDATA_FILES = {'data_JI_SSAM1_default.mat'};
+                    elseif any(strcmpi(input_struct.sensor, {'ONR SSAM2', 'MK 18 mod 2'}))
+                        params.CDATA_FILES = {'data_JI_SSAM2_default.mat'};
+                    else
+                        error('Classifier not trained for sensor type ''%s''.',...
+                            input_struct.sensor);
+                    end
+                    params.CLASS_DATA = 1;
+                    params.INV_IMG_ON = 0;
+                    params.INV_IMG_MODES = {};
+                    params.TB_FEEDBACK_ON = 0;
+                otherwise
+                    params.DETECTOR = 1;
+                    params.CLASSIFIER = 2;
+                    params.FEATURES = 1;
+                    if strcmpi(input_struct.sensor, 'ONR SSAM')
+                        params.CDATA_FILES = {'data_SIGdefault.mat'};
+                    else
+                        error('Classifier not trained for sensor type ''%s''.',...
+                            input_struct.sensor);
+                    end
+                    params.CLASS_DATA = 1;
+                    params.INV_IMG_ON = 0;
+                    params.INV_IMG_MODES = {};
+                    params.TB_FEEDBACK_ON = 1;
+            end
         end
-        if sum( temp.CLASSIFIER == 1:length(temp.CLS_HANDLES) ) > 0
-            params.CLASSIFIER = temp.CLASSIFIER;
-            params.CLS_HANDLES = temp.CLS_HANDLES;
-        end
-        if sum( temp.FEATURES == 1:length(temp.FEAT_HANDLES) ) > 0
-            params.FEATURES = temp.FEATURES;
-            params.FEAT_HANDLES = temp.FEAT_HANDLES;
-        end
-        if sum( temp.CLASS_DATA == 1:length(temp.CDATA_FILES) ) > 0
-            params.CLASS_DATA = temp.CLASS_DATA;
-            params.CDATA_FILES = temp.CDATA_FILES;
-        end
-        if temp.INV_IMG_ON == 0 || temp.INV_IMG_ON == 1
-            params.INV_IMG_ON = temp.INV_IMG_ON;
-        end
-        if iscell(temp.INV_IMG_MODES)
-            params.INV_IMG_MODES = temp.INV_IMG_MODES;
-        end
-        if temp.BG_SNIPPET_ON == 0 || temp.BG_SNIPPET_ON == 1
-            params.BG_SNIPPET_ON = temp.BG_SNIPPET_ON;
-        end
-        
-    else
-        switch input_struct.targettype % automatic D/C selection
-            case {'wedge','truncated cone','cylindrical','torpedo','sphere'}
-                params.DETECTOR = 1;
-                params.CLASSIFIER = 1;
-                params.FEATURES = 1;
-                if strcmpi(input_struct.sensor, 'ONR SSAM')
-                    params.CDATA_FILES = {'data_JI_SSAM1_default.mat'};
-                elseif any(strcmpi(input_struct.sensor, {'ONR SSAM2', 'MK 18 mod 2'}))
-                    params.CDATA_FILES = {'data_JI_SSAM2_default.mat'};
-                else
-                    error('Classifier not trained for sensor type ''%s''.',...
-                        input_struct.sensor);
-                end
-                params.CLASS_DATA = 1;
-                params.INV_IMG_ON = 0;
-                params.INV_IMG_MODES = {};
-                params.TB_FEEDBACK_ON = 0;
-            otherwise
-                params.DETECTOR = 1;
-                params.CLASSIFIER = 2;
-                params.FEATURES = 1;
-                if strcmpi(input_struct.sensor, 'ONR SSAM')
-                    params.CDATA_FILES = {'data_SIGdefault.mat'};
-                else
-                    error('Classifier not trained for sensor type ''%s''.',...
-                        input_struct.sensor);
-                end
-                params.CLASS_DATA = 1;
-                params.INV_IMG_ON = 0;
-                params.INV_IMG_MODES = {};
-                params.TB_FEEDBACK_ON = 1;
-        end
-    end
-    
-    %%added by Michael Rowe 10/26/10
-    if params.SKIP_PERF_EST == 0
-        if sum(temp.PERFORMANCE == 1:length(temp.PERF_HANDLES))
-            params.PERFORMANCE = temp.PERFORMANCE;
-            params.PERF_HANDLES = temp.PERF_HANDLES;
-        end
-    end
-    
-    if ~isempty(temp.TB_ROOT)
-        params.TB_ROOT = temp.TB_ROOT;
-    end
-    if temp.SKIP_DETECTOR == 0 || temp.SKIP_DETECTOR == 1
-        params.SKIP_DETECTOR = temp.SKIP_DETECTOR;
-    end
-    if temp.SKIP_PERF_EST == 0 || temp.SKIP_PERF_EST == 1
-        params.SKIP_PERF_EST = temp.SKIP_PERF_EST;
-    end
-    if sum( temp.SKIP_FEEDBACK == 0:3 ) > 0
-        params.SKIP_FEEDBACK = temp.SKIP_FEEDBACK;
+
+        params = copy_valid_indvec_field(temp,params,'PERFORMANCE','PERF_HANDLES');
+        params = copy_valid_str_field(temp, params, 'TB_ROOT');
+        params = copy_valid_int_field(temp, params, 'SKIP_DETECTOR', 0:1);
+        params = copy_valid_int_field(temp, params, 'SKIP_PERF_EST', 0:1);
+        params = copy_valid_int_field(temp, params, 'SKIP_FEEDBACK', 0:3);
         % make sure inputs are being saved if using SIG GUI
-        if temp.SKIP_FEEDBACK == 4
+        if isfield(temp, 'SKIP_FEEDBACK') && temp.SKIP_FEEDBACK == 4
             params.DEBUG_MODE = 1;
         end
-    end
-    if temp.ARCH_FEEDBACK == 0 || temp.ARCH_FEEDBACK == 1
-        params.ARCH_FEEDBACK = temp.ARCH_FEEDBACK;
-    end
-    if temp.TB_FEEDBACK_ON == 0 || temp.TB_FEEDBACK_ON == 1
-        params.TB_FEEDBACK_ON = temp.TB_FEEDBACK_ON;
-    end
-    if sum( temp.OPCONF_MODE == 0:2 ) > 0
-        params.OPCONF_MODE = temp.OPCONF_MODE;
-    end
-    if temp.PLOTS_ON == 0 || temp.PLOTS_ON == 1
-        params.PLOTS_ON = temp.PLOTS_ON;
-    end
-    if (temp.PLOT_OPTIONS(1) == 0 || temp.PLOT_OPTIONS(1) == 1) && ...
-            (temp.PLOT_OPTIONS(2) == 0 || temp.PLOT_OPTIONS(2) == 1) && ...
-            (temp.PLOT_OPTIONS(3) == 0 || temp.PLOT_OPTIONS(3) == 1)
-        params.PLOT_OPTIONS = temp.PLOT_OPTIONS;
-    end
-    if temp.PLOT_PAUSE_ON == 0 || temp.PLOT_PAUSE_ON == 1
-        params.PLOT_PAUSE_ON = temp.PLOT_PAUSE_ON;
-    end
-    if temp.SAVE_IMAGE == 0 || temp.SAVE_IMAGE == 1
-        params.SAVE_IMAGE = temp.SAVE_IMAGE;
-    end
-    if ~isempty(temp.PRE_DET_RESULTS)
-        params.PRE_DET_RESULTS = temp.PRE_DET_RESULTS;
-    end
-    ok = 1;
-catch ME
-%     disp('Parameter mismatch.');
-%     keyboard;
-end
-end
+        params = copy_valid_int_field(temp, params, 'ARCH_FEEDBACK', 0:1);
+        params = copy_valid_int_field(temp, params, 'TB_FEEDBACK_ON', 0:1);
+        params = copy_valid_int_field(temp, params, 'OPCONF_MODE', 0:2);
+        params = copy_valid_int_field(temp, params, 'PLOTS_ON', 0:1);
+        params = copy_valid_int_field(temp, params, 'PLOT_OPTIONS', 0:1);
+        params = copy_valid_int_field(temp, params, 'PLOT_PAUSE_ON', 0:1);
+        params = copy_valid_int_field(temp, params, 'SAVE_IMAGE', 0:1);
+        params = copy_valid_str_field(temp, params, 'PRE_DET_RESULTS');
+        params = copy_valid_str_field(temp, params, 'SRC_DIR');
+        params = copy_valid_str_field(temp, params, 'OUT_DIR');
+        params = copy_valid_str_field(temp, params, 'ECD_DIR');
+        params = copy_valid_str_field(temp, params, 'TEMP_DIR');
+        % Check to make sure output folders exist.  If they don't, make them.
+        % Otherwise an error will occur when file writing is attempted to
+        % the non-existent folder.
+        if exist(params.OUT_DIR, 'dir') == 0
+            mkdir(params.OUT_DIR);
+        end
+        if exist(params.ECD_DIR, 'dir') == 0
+            mkdir(params.ECD_DIR);
+        end
+        if exist(params.TEMP_DIR, 'dir') == 0
+            mkdir(params.TEMP_DIR);
+        end
+        ok = 1;
+    catch ME
+    %     disp('Parameter mismatch.');
+    %     keyboard;
+    end % end try block
+end     % end 'if isempty(temp)'
+end     % end function

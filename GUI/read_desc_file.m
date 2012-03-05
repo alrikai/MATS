@@ -9,17 +9,15 @@ while ischar(line)
     % Parse data from line
     temp = regexp(line, '(?<param>\w+):[ ]*(?<val>.+)', 'names');
     
-    switch temp.param
-        case {'uses_feedback';'reqs_inv_img';'reqs_bg_snippet'}
-            % These are the boolean-like variables...
-            if strcmpi(temp.val,'no') == 1 || str2double(temp.val) == 0
-                desc_params.(temp.param) = 0;
-            elseif strcmpi(temp.val,'yes') == 1 || str2double(temp.val) == 1
-                desc_params.(temp.param) = 1;
-            end
-        otherwise
-            % These are the strings...
-            desc_params.(temp.param) = temp.val;
+    if strcmpi(temp.val,'no') == 1 || str2double(temp.val) == 0
+        % Boolean 0
+        desc_params.(temp.param) = 0;
+    elseif strcmpi(temp.val,'yes') == 1 || str2double(temp.val) == 1
+        % Boolean 1
+        desc_params.(temp.param) = 1;
+    else
+        % These are the strings...
+        desc_params.(temp.param) = temp.val;
     end
     
     % Read next line from file

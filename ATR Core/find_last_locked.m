@@ -3,7 +3,6 @@ function lastlock_index = find_last_locked(contacts, show_details)
 % fixed and will no longer change).  This is done by forward searching the
 % list for an .opconf value < 0, which indicates an unlocked contact.
 
-% lastlock_index = 0;
 lastlock_index = length(contacts);
 tempdone = 0;
 tempmarker = 1;
@@ -17,12 +16,7 @@ while tempmarker <= length(contacts) && tempdone == 0
     end
     tempmarker = tempmarker + 1;
 end
-% if tempdone == 0
-%    % No negative values exist (all values are locked)
-%    
-%    % Mark the last contact with lastlock_index
-%    lastlock_index = length(contacts);
-% end
+
 if show_details == 1
     fprintf(1, 'Index last locked: %d\n\n', lastlock_index);
 end

@@ -35,7 +35,7 @@ for q = 1:length(subdirs)
     files = subdir_cell(1, :);
     % find files that start with 'str' and are followed by an underscore,
     % the subdirectory name, with a .m or .p extension
-    matches = regexp(files, ['^',str,'_',subdirs{q},'\.(m|p)'],'match');
+    matches = regexp(files, ['^',str,'_',subdirs{q},'\.(m|p)$'],'match');
     matches_bool = ~cellfun('isempty',matches);
     file = files(matches_bool);
     if ~isempty(file)
@@ -44,7 +44,7 @@ for q = 1:length(subdirs)
         fcn_handles = [fcn_handles; {str2func( file{1}(1:end-2) )}];
     else
         % no match found; look for HF/BB variants
-        [matches,tkns] = regexp(files, ['^',str,'_',subdirs{q},'\_(HF|BB).(m|p)'],...
+        [matches,tkns] = regexp(files, ['^',str,'_',subdirs{q},'\_(HF|BB).(m|p)$'],...
             'match','tokens','once');
         matches_bool = ~cellfun('isempty',matches);
         files = files(matches_bool);

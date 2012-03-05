@@ -9,14 +9,19 @@ function contacts = opfeedback_stub(contacts, TB_params, varargin)
 % contacts (in) = array of contact structures representing potential
 %   targets in all images up to this point
 % TB_params = testbed configuration structure
+% label_nums (optional) = indices of the vector contacts.  Without this
+%   vector present, the first contact will be labeled #1, the second #2,
+%   and so on.  If the contact list has been cherry-picked (e.g., reviewing
+%   all of the contacts that have been skipped) then this will not match
+%   the actual indices of the contacts.
 %
 % contacts (out) = same as above, but with field .opfeedback.opconf
 %   filled in.
 %
 % Derek Kolacinski, NSWC PC (derek.kolacinski@navy.mil)
-% Last update: 10 Feb 2010
+% Last update: 20 Dec 2011
 
-full_version = 0; % 1 = normal mode; 0 = public release version
+full_version = 1; % 1 = normal mode; 0 = public release version
 
 % Determine the contact labellings.  Normally, this is the contact's index
 % in the list, but this can be overridden for the final summary of
@@ -40,12 +45,11 @@ if mine_sum == 0
     % contact list for this image doesn't contain any mines
     return
 end
-% if isempty(contacts) == 1, return, end;
 
-% negative offset for .opdisplay. This will be subracted from the initial
+% negative offset for .opdisplay. This will be subtracted from the initial
 % values to indicate that the contact has been viewed and processed.
 dispmod = 10;
-% Start at beginning of newest image
+% Start at beginning of contact list
 img_cnt = 1;
 % number of contacts to be processed by the operator before reclassification
 % occurs.
@@ -58,12 +62,12 @@ while img_cnt <= length(contacts) && contacts(img_cnt).opfeedback.opdisplay < 0
 end
 % skip over contacts that won't be shown
 while img_cnt <= length(contacts) && contacts(img_cnt).opfeedback.opdisplay <= 0
-% while img_cnt <= length(contacts) && contacts(img_cnt).opfeedback.opdisplay == 0
     contacts(img_cnt).opfeedback.opdisplay = contacts(img_cnt).opfeedback.opdisplay - dispmod; % mark processed
-    contacts(img_cnt).opfeedback.opconf = 0; %%%%%
+    contacts(img_cnt).opfeedback.opconf = 0;
     img_cnt = img_cnt + 1;
-%     lastview_index = img_cnt;
 end
+% img_cnt now points to first contact designated to be shown to the user
+
 % in the event that there are no contacts to view, prepare to exit quickly
 if img_cnt > length(contacts)
     done = 1;
@@ -103,16 +107,24 @@ set(hratinggroup, 'SelectedObject', []);
 hlabel = uicontrol('Style', 'text', 'String', ['Contact #',num2str(label_nums(img_cnt))],...
     'Position', [10, 10+6*spacing, 100, 16]);
 
+if TB_params.MULTICLASS == 1
+uicontrol('Style', 'text', 'String', 'Mine type:',...
+    'Position', [160, 10+6*spacing, 100, 16]);
+[type_vals, type_str_list] = get_objtype_vals();
+htypemenu = uicontrol('Style', 'popupmenu', 'String', type_str_list,...
+    'Position', [260, 10+6*spacing+2, 100, 16]);
+end
+
 hnextbutton = uicontrol('Style', 'pushbutton', 'String', 'Next',...
     'Position', [110, 10+6*spacing, 50, 16], 'Callback', {@next_clbk});
 
 if full_version
 uicontrol('Style', 'text', 'String', 'Add bogus contact @ index',...
-    'Position', [210, 10+6*spacing,100,16]);
+    'Position', [210, 10+1*spacing,100,16]);
 haddinput = uicontrol('Style', 'edit',...
-    'Position', [310, 10+6*spacing,50,16]);
+    'Position', [310, 10+1*spacing,50,16]);
 haddbutton = uicontrol('Style', 'pushbutton', 'String', 'Add',...
-    'Position', [210, 10+5*spacing,100,16], 'Callback', {@add_clbk});
+    'Position', [210, 10+0*spacing,100,16], 'Callback', {@add_clbk});
 end
 
 haxes = axes('Position', [.1, .35, .8, .6], 'Color', 'white');
@@ -125,10 +137,23 @@ while 0 == 0
         fprintf(1,'\n%-s\n\n','Operator block done.');
         return
     else
-        disp('Waiting for operator response...');
+        % Display image snippet
         figure(f);
         set(f, 'CurrentAxes', haxes);
-        imagesc(abs(contacts(img_cnt).hfsnippet));
+        color_map = change_cmap;
+        colormap(color_map);
+%         temp = abs(contacts(img_cnt).hfsnippet);
+        ecdata = load_ecd(contacts(img_cnt));
+        temp = imadjust(clip_image( abs(ecdata.hfsnippet) ) ,[0.001 0.70],[],1);
+%         temp = imadjust(clip_image(temp) ,[0.001 0.70],[],1);
+        imagesc(temp);
+        
+        if TB_params.MULTICLASS == 1
+            % Set default mine type to be that determined by the classifier
+            def_ind = get_def_index( contacts(img_cnt).class, type_vals );
+            set(htypemenu, 'Value', def_ind);
+        end
+        disp('Waiting for operator response...');
         waitfor(f)
     end
 end
@@ -137,7 +162,7 @@ end
     function add_clbk(junk,junk2)
         % Adds a bogus contact at the location specified in the text field,
         % provided that that location is valid for the current contact
-        % list.
+        % list.  (For debugging purposes)
         set(haddbutton,'Enable','off');
         set(hnextbutton,'Enable','off');
         index = str2double( get(haddinput, 'String') );
@@ -188,6 +213,10 @@ end
             if ~isempty(temp_opconf)    % ...and the choice was not skipped...
                 % import operator choice into contact list
                 contacts(img_cnt).opfeedback.opconf = temp_opconf;
+                if TB_params.MULTICLASS == 1
+                    contacts(img_cnt).opfeedback.type = ...
+                        type_vals(get(htypemenu,'Value'));
+                end
                 if TB_params.TB_HEAVY_TEXT == 1
                     disp(['Selected choice #',num2str(get(choice, 'UserData'))]);
                 end
@@ -267,11 +296,20 @@ end
 %                 disp(['** Preparing for #',num2str(img_cnt)]);                
                 % refresh image snippet
                 set(f, 'CurrentAxes', haxes);
-                imagesc(abs(contacts(img_cnt).hfsnippet));
+        ecdata = load_ecd(contacts(img_cnt));
+        temp = imadjust(clip_image( abs(ecdata.hfsnippet) ) ,[0.001 0.70],[],1);
+%                 temp = abs(contacts(img_cnt).hfsnippet);
+%                 temp = imadjust(clip_image(temp) ,[0.001 0.70],[],1);
+                imagesc(temp);
                 % refresh contact # label
                 set(hlabel, 'String', ['Contact #',num2str(label_nums(img_cnt))]);
                 % clear radio button selection
-                set(hratinggroup, 'SelectedObject', []); 
+                set(hratinggroup, 'SelectedObject', []);
+                if TB_params.MULTICLASS == 1
+                    % Set default mine type to be that determined by the classifier
+                    def_ind = get_def_index( contacts(img_cnt).class, type_vals );
+                    set(htypemenu, 'Value', def_ind);
+                end
             end
            
         else
@@ -284,6 +322,12 @@ end
     end
 
 %%% HELPER FUNCTIONS
+    function ecd = load_ecd(contact)
+        ecd_fname = contact.ecdata_fn;
+        assert(~isempty(ecd_fname), 'Filename for ecdata is empty');
+        ecd = read_extra_cdata(ecd_fname);
+    end
+        
     function val = incr_opfile_cnt()
         % increment the value stored in the opfeedback counter file
         cnt_fid = fopen([TB_params.TB_ROOT,filesep,'feedback_cnt.txt'], 'r+'); %read and write
@@ -332,4 +376,10 @@ end
         fclose(fid);
     end
 
+    function ind = get_def_index(val, val_list)
+        ind = find( val == val_list , 1);
+        if isempty(ind)
+            ind = 1;
+        end
+    end
 end

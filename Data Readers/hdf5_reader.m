@@ -51,14 +51,6 @@ s.side = upper(port_or_stbd);
 % lat/long
 s.lat  = PlatformNavigation.Latitude;
 s.long = PlatformNavigation.Longitude;
-% gt
-if isempty(gtf)
-    s.havegt = 0;
-    s.gtimage = [];
-else
-    s.havegt = 1;
-    s.gtimage = hdf5_gt_reader(fname_hi, port_or_stbd, gtf, TB_params.TB_HEAVY_TEXT);
-end
 % target type
 s.targettype = 'sphere';
 % performance estimation parameters
@@ -136,6 +128,19 @@ end
 
 % sweet spot
 s.sweetspot = calc_sweetspot(s);
+
+% gt
+if isempty(gtf)
+    s.havegt = 0;
+    s.gtimage = [];
+else
+    s.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        s.gtimage = hdf5_gt_reader(fname_hi, port_or_stbd, gtf, TB_params.TB_HEAVY_TEXT);
+    elseif TB_params.GT_FORMAT == 2
+        s.gtimage = latlong_gt_reader(s, gtf);
+    end
+end
 
 end
 

@@ -1,7 +1,7 @@
   *******************************************************************
   ***  INFORMATION ABOUT Modular ATR Testing Suite (MATS) v1.0    ***
   *******************************************************************
-                      20 October 2011
+                      1 March 2012
 
 The Modular Algorithm Testing Suite (MATS) is a software package for the development and 
 testing of automatic target recognition (ATR) algorithms.  It employs an open, modular
@@ -41,28 +41,27 @@ DISTRIBUTION STATEMENT A. Approved for public release; distribution is unlimited
 Below is a full list of files that should be on the MATS CD.  If any of these files 
 are missing contact the individuals above. 
 
-You should copy the MATS v1.0 folder over to your computer before running the software.
+You should copy the MATS v1.1 folder over to your computer before running the software.
 
-MATS V1.0:
+MATS V1.1:
+  MATS_Public_Release:
+
    README.txt
    atr_testbed_altfb.m
    dev_clean.m
+   feedback_cnt.txt
+   filelist.txt
    run_cont_correlation.m
    testbed_gui.m
    write_calls_file.m
 
-   AC Prep:
-      acprep.m
-      modDeps.m
-
-      local:
-         imapContact.m
-         istolt.m
-         secant.m
-         stolt.m
-
    ATR Core:
       calcdistbear.m
+      change_cmap.m
+      clip_image.m
+      copy_valid_indvec_field.m
+      copy_valid_int_field.m
+      copy_valid_str_field.m
       delete_flag.m
       detsub_contact_fill.m
       detsub_gt.m
@@ -71,28 +70,46 @@ MATS V1.0:
       find_last_viewed.m
       general_display.m
       geolocate.m
+      geolocate_batch.m
+      get_objtype_vals.m
       load_old_results.m
       make_bg_snippet.m
       make_snippet_alt.m
+      mex_normalizer_SBR.c
+      mex_normalizer_SBR.dll
+      mex_normalizer_SBR.mexa64
+      mex_normalizer_SBR.mexglx
+      mex_normalizer_SBR.mexmaci64
       mstl_colors_ascii.txt
       normalize_images.m
       overwrite_backups.m
       read_backups.m
       read_contacts.m
+      read_extra_cdata.m
       read_feedback.m
       read_lock_index.m
+      read_ofdata.m
       reset_opfile_cnt.m
       sort_contacts.m
       wait_if_flag.m
+      write_all_ecdata.m
+      write_all_ofdata.m
       write_backups.m
       write_contacts.m
+      write_extra_cdata.m
       write_flag.m
+      write_ofdata.m
 
    Classifiers:
 
       Test:
          about.txt
          cls_Test.m
+         data_bogus_default.mat
+
+      Test_multi:
+         about.txt
+         cls_Test_multi.m
          data_bogus_default.mat
 
    Contact Correlation:
@@ -103,11 +120,16 @@ MATS V1.0:
    Data Readers:
       bravo_gt_reader.m
       csdt_reader.m
+      et_gt_reader.m
       gen_input_struct_bravo.m
       hdf5_gt_reader.m
       hdf5_reader.m
+      latlong_gt_reader.m
+      latlong_to_xy.m
       mat_reader.m
+      mats_struct_gt_reader.m
       mats_struct_reader.m
+      mst_reader.m
       mymat_gt_reader.m
       mymat_reader.m
       nswc_gt_reader.m
@@ -130,6 +152,9 @@ MATS V1.0:
          calcNominalHeading.m
          readHDF5_mcmSpec.m
 
+      mst:
+         MSTIFF_reader.m
+
       mymat:
          calcpingimg.m
          default.m
@@ -147,7 +172,6 @@ MATS V1.0:
          det_Test.m
 
    Docs:
-      Testbed IO chart.pdf
 
       MATS_Manual:
          MATS_Manual.pdf
@@ -165,20 +189,30 @@ MATS V1.0:
 
    GUI:
       abbrev_string.m
+      bin_equiv.m
       bravo_input_sim.m
       compare_results.m
+      compare_results_latlong.m
       compare_roc.m
       confusion_series.m
+      convert_latlong_gt_to_xy.m
       fuf.m
       gen_file_list.m
       gen_proc_file_list.m
+      get_aboutfname.m
+      get_detlistname.m
+      get_detname.m
       get_format_dlg.m
       import_classdata.m
       import_modules.m
       load_prep.m
+      opfeedback_display_gui.m
       read_desc_file.m
       retrain_prep.m
       roc_series.m
+      update_all_cls_desc_params.m
+      update_all_det_desc_params.m
+      update_all_feat_desc_params.m
       update_cls_desc_params.m
       update_det_desc_params.m
       update_feat_desc_params.m
@@ -194,6 +228,7 @@ MATS V1.0:
          sort_db.m
 
    Misc:
+      filelist_inventory.m
       searchfile.m
       searchfolder.m
       whereis.m
@@ -202,12 +237,3 @@ MATS V1.0:
 
       Test:
          perf_Test.m
-
-   description:
-
-      description:
-
-
-
- 
- 

@@ -43,6 +43,7 @@ while 0==0 % scan all GT data
             gt.code(i) = code_i;
             gt.fn = fn_i;
             gt.score(i) = score_i;
+            gt.type(i) = -99; % FIX LATER
             if strcmpi(side_char, 'p')
                 gt.side = 'Port';
             elseif strcmpi(side_char, 's')

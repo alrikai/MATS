@@ -1,0 +1,4 @@
+module_name: Test Classifier (Multiclass)
+module_tag: TEST-M
+uses_feedback: 0
+multiclass: 1

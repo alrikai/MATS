@@ -16,7 +16,7 @@ function [hi_list, lo_list, fullpath] = gen_file_list(sd, frmt_index, pairs_only
 % pairs_only = if 1, prunes the lists of files to include only those with
 %   all frequencies present
 
-fullpath = '';
+fullpath = ''; hi_list = {}; lo_list = {};
 
 switch frmt_index
     case {1,4}  % Bravo||NSWC .mat: all data in one file; 'lo_list' is empty
@@ -26,6 +26,12 @@ switch frmt_index
     case 2  % .mymat
         % Get all filenames from HF folder
         dir_struct_hi = dir([sd,filesep,'HF',filesep,'*.mymat']);
+        file_list = fuf([sd,filesep,'HF',filesep,'*.mymat'],1,'detail');
+        for ii = 1:size(file_list,1)
+            tmp = find(file_list{ii} == filesep);
+            fullpath{ii} = file_list{ii}(1:tmp(end)-1);
+            file_list{ii} = file_list{ii}(tmp(end)+1:end);
+        end
         hi_list = extract_names(dir_struct_hi);
         % Get all filenames from LF folder
         dir_struct_lo = dir([sd,filesep,'LF',filesep,'*.mymat']);
@@ -69,6 +75,8 @@ switch frmt_index
 %         dir_struct = dir([sd,filesep,'*.h5']);
 %         file_list = extract_names(dir_struct);
         file_list = fuf([sd,filesep,'*.h5'],1,'detail');
+        if isempty(file_list), return; end
+        
         for ii = 1:size(file_list,1)
             tmp = find(file_list{ii} == filesep);
             fullpath{ii} = file_list{ii}(1:tmp(end)-1);
@@ -101,6 +109,8 @@ switch frmt_index
     case 6 %MUSCLE
 %         dir_struct = dir([sd,filesep,'MUSCLE*.mat']);
         file_list = fuf([sd,filesep,'MUSCLE*.mat'],1,'detail');
+        if isempty(file_list), return; end
+        
         for ii = 1:size(file_list,1)
             tmp = find(file_list{ii} == filesep);
             fullpath{ii} = file_list{ii}(1:tmp(end)-1);
@@ -127,6 +137,10 @@ switch frmt_index
         lo_list = extract_names(dir_struct_lo);
     case 10 % MATS input structure
         dir_struct = dir([sd, filesep, '*.mat']);
+        hi_list = extract_names(dir_struct);
+        lo_list = cell(length(hi_list),1);
+    case 11 %MST
+         dir_struct = dir([sd, filesep,'*.mst']);
         hi_list = extract_names(dir_struct);
         lo_list = cell(length(hi_list),1);
     otherwise

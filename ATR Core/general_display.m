@@ -4,7 +4,44 @@ function general_display(input, contact_list, TB_params, od)
 % TB_params.PLOT_OPTIONS = [1/0 (det), 1/0 (class), 1/0 (gt)]
 
 %% Data
-if  ~isempty(input.hf)
+
+side = input.side;
+filename = input.fn;
+gt = input.gtimage;
+[m_hf, n_hf] = size(input.hf); [m_bb, n_bb] = size(input.bb);
+
+if ~isempty(contact_list)
+    fmatch = strcmp({contact_list.fn}, filename) & strcmp({contact_list.side},side);
+    in_this_file = contact_list(fmatch);
+else
+    in_this_file = [];
+end
+
+split_box = 0;
+if ~isempty(TB_params.PRE_DET_RESULTS)
+    [junk, f] = fileparts(input.fn);
+    roc_fn = [TB_params.PRE_DET_RESULTS,filesep,'ROC_',f,'_',input.side,'.mat'];
+    try
+        old = load(roc_fn);
+        assert(length(old.classes) == length([in_this_file.class]), 'Incorrect ROC file loaded');
+        split_box = 1;
+    catch ME
+        
+    end
+end
+
+[detname, var] = get_detname(TB_params);
+if strcmpi(var, 'BB') == 1      % using BB detector
+    if strcmpi(input.sensor, 'SSAM III') && ~isempty(input.lf1)
+        image = abs(input.lf1);
+        band_tag = 'LF1';
+        [m_lf1, n_lf1] = size(input.lf1);
+    else
+        image = abs(input.bb);
+        band_tag = 'BB';
+    end
+elseif  ~isempty(input.hf)      % using HF detector, or both bands
+    % use HF image if available
     image = abs(input.hf);
     band_tag = 'HF';
 elseif ~isempty(input.bb)
@@ -13,21 +50,57 @@ elseif ~isempty(input.bb)
 else 
     error('No data input to general display function')
 end
-range_resolution = input.hf_cres;
-track_resolution = input.hf_ares;
-side = input.side;
-filename = input.fn;
-gt = input.gtimage;
-switch input.sensor
-    case {'ONR SSAM','ONR SSAM2','MK 18 mod 2'}
-        roix = 25;
-        roiy = 35;
-    case 'MUSCLE'
-        roix = 15;
-        roiy = 70;
-    otherwise
-        error('Sensor not recognized')
+
+switch band_tag
+    case {'HF','hf'}
+        range_resolution = input.hf_cres;
+        track_resolution = input.hf_ares;
+        y_ratio = 1; x_ratio = 1;
+        switch input.sensor
+            case {'ONR SSAM','ONR SSAM2','MK 18 mod 2'}
+                roix = 130;
+                roiy = 100;
+            case 'MUSCLE'
+                roix = 60;
+                roiy = 70;
+            case 'EDGETECH'
+                roix = 201;
+                roiy = 10;
+            case 'MARINESONIC'
+                roix = 20;
+                roiy = 20;
+            otherwise
+                error('Sensor not recognized')
+        end
+    case {'BB','bb'}
+        range_resolution = input.bb_cres;
+        track_resolution = input.bb_ares;
+        y_ratio = m_hf/m_bb; x_ratio = n_hf/n_bb;
+        switch input.sensor
+            case {'ONR SSAM','ONR SSAM2','MK 18 mod 2'}
+                roix = round(75/x_ratio);
+                roiy = round(50/y_ratio);
+            case 'MUSCLE'
+                roix = round(60/x_ratio);
+                roiy = round(70/y_ratio);
+            case 'EDGETECH'
+                roix = round(2/x_ratio);
+                roiy = round(300/y_ratio);              
+            otherwise
+                error('Sensor not recognized')
+        end
+    case {'LF1','lf1'}
+        range_resolution = input.lf1_cres;
+        track_resolution = input.lf1_ares;
+        y_ratio = m_hf/m_lf1; x_ratio = n_hf/n_lf1;
+        switch input.sensor
+            case 'SSAM III'
+                roix = round(75/x_ratio);
+                roiy = round(50/y_ratio);  
+        end
 end
+
+spacerx = 5*range_resolution; spacery = 10*track_resolution;
 
 %% Display Image
 [m_track,n_range] = size(image);
@@ -40,26 +113,31 @@ track_axis=[0, m_track*track_resolution];
 
 %% Prep Vectors
 gt_x = []; gt_y = []; dets_x = []; dets_y = []; clss_x = []; clss_y = [];
-if ~isempty(contact_list)
-    fmatch = strcmp({contact_list.fn}, filename) & strcmp({contact_list.side},side);
-    in_this_file = contact_list(fmatch);
-else
-    in_this_file = [];
-end
+clss_x_old = []; clss_y_old = [];
 
 if ~isempty(in_this_file)
-    dets_x = [in_this_file.x] * range_resolution;
-    dets_y = [in_this_file.y] * track_resolution;
-    mines = in_this_file([in_this_file.class] == 1);
+    dets_x = [in_this_file.x]/x_ratio * range_resolution;
+    dets_y = [in_this_file.y]/y_ratio * track_resolution;
+    con_inds = [in_this_file.class] >= 1;
+    mines = in_this_file(con_inds);
     if ~isempty(mines)
-        clss_x = [mines.x] * range_resolution;
-        clss_y = [mines.y] * track_resolution;
+        clss_x = [mines.x]/x_ratio * range_resolution;
+        clss_y = [mines.y]/y_ratio * track_resolution;
+        classes = [mines.class];
+    end
+    if split_box == 1
+        mines_old = in_this_file(old.classes >= 1);
+        if ~isempty(mines_old);
+            clss_x_old = [mines_old.x]/x_ratio * range_resolution;
+            clss_y_old = [mines_old.y]/y_ratio * track_resolution;
+            old_classes = old.classes(old.classes >= 1);
+        end
     end
 end
 
 if ~isempty(gt)
-    gt_x = gt.x * range_resolution;
-    gt_y = gt.y * track_resolution;
+    gt_x = gt.x/x_ratio * range_resolution;
+    gt_y = gt.y/y_ratio * track_resolution;
 end
 
 axes(img_axes); lab_colors = {'Black'; 'Black'; 'Black'};
@@ -67,9 +145,9 @@ axes(img_axes); lab_colors = {'Black'; 'Black'; 'Black'};
 %% Mark Targets
 if(TB_params.PLOT_OPTIONS(3) > 0) % GT
     if ~isempty(gt)
-        % x is track; y is range
-        xsize=fix(size(image,1)/(roix+5))* range_resolution;
-        ysize=fix(size(image,2)/(roiy+5))* track_resolution;
+        % y is track; x is range
+        xsize=fix((roix+15))* range_resolution;
+        ysize=fix((roiy+15))* track_resolution;
         for ii = 1:length(gt_x)
             line([gt_x(ii)+xsize gt_x(ii)+xsize],[gt_y(ii)-ysize gt_y(ii)+ysize],'LineWidth',3,'Color','b');
             line([gt_x(ii)-xsize gt_x(ii)-xsize],[gt_y(ii)-ysize gt_y(ii)+ysize],'LineWidth',3,'Color','b');
@@ -81,28 +159,60 @@ if(TB_params.PLOT_OPTIONS(3) > 0) % GT
 end
 
 if(TB_params.PLOT_OPTIONS(1) > 0) % DET
-    % x is track; y is range
-    xsize=fix(size(image,1)/roix)* range_resolution;
-    ysize=fix(size(image,2)/roiy)* track_resolution;
+    % y is track; x is range
+    xsize=fix(roix)* range_resolution;
+    ysize=fix(roiy)* track_resolution;
     for ii = 1:length(dets_x)
         line([dets_x(ii)+xsize dets_x(ii)+xsize],[dets_y(ii)-ysize dets_y(ii)+ysize],'LineWidth',3,'Color','g');
         line([dets_x(ii)-xsize dets_x(ii)-xsize],[dets_y(ii)-ysize dets_y(ii)+ysize],'LineWidth',3,'Color','g');
         line([dets_x(ii)-xsize dets_x(ii)+xsize],[dets_y(ii)-ysize dets_y(ii)-ysize],'LineWidth',3,'Color','g');
         line([dets_x(ii)-xsize dets_x(ii)+xsize],[dets_y(ii)+ysize dets_y(ii)+ysize],'LineWidth',3,'Color','g');
-        text(dets_x(ii), dets_y(ii)-ysize,num2str(ii),'Color','white');
+        text(dets_x(ii), dets_y(ii)-ysize-spacery,num2str(ii),'Color','white',...
+            'VerticalAlignment','top', 'HorizontalAlignment', 'center',...
+            'Clipping', 'on');
     end
     lab_colors{1} = 'Green';
 end
 
 if(TB_params.PLOT_OPTIONS(2) > 0) % CLASS
-    % x is track; y is range
-    xsize=fix(size(image,1)/roix)* range_resolution;
-    ysize=fix(size(image,2)/roiy)* track_resolution;
+    % y is track; x is range
+    xsize=fix(roix)* range_resolution;
+    ysize=fix(roiy)* track_resolution;
+    if split_box == 1   % comparing to previous results
+    for ii = 1:length(clss_x_old)   % left side of box (old)
+        line([clss_x_old(ii)-xsize clss_x_old(ii)-xsize],[clss_y_old(ii)-ysize clss_y_old(ii)+ysize],'LineWidth',3,'Color','r');
+        line([clss_x_old(ii)-xsize clss_x_old(ii)],[clss_y_old(ii)-ysize clss_y_old(ii)-ysize],'LineWidth',3,'Color','r');
+        line([clss_x_old(ii)-xsize clss_x_old(ii)],[clss_y_old(ii)+ysize clss_y_old(ii)+ysize],'LineWidth',3,'Color','r');
+        % Technically we want the TB_params from the previous run, but those
+        % aren't saved.  This is a decent approximation.
+        if TB_params.MULTICLASS == 1
+        text(clss_x_old(ii)-xsize-spacerx, clss_y_old(ii), ['C=',num2str(old_classes(ii))],'Color','white',...
+            'VerticalAlignment','middle','HorizontalAlignment','right',...
+            'Clipping', 'on');
+        end
+    end
+    for ii = 1:length(clss_x)       % right side of box (new)
+        line([clss_x(ii)+xsize clss_x(ii)+xsize],[clss_y(ii)-ysize clss_y(ii)+ysize],'LineWidth',3,'Color','r');
+        line([clss_x(ii) clss_x(ii)+xsize],[clss_y(ii)-ysize clss_y(ii)-ysize],'LineWidth',3,'Color','r');
+        line([clss_x(ii) clss_x(ii)+xsize],[clss_y(ii)+ysize clss_y(ii)+ysize],'LineWidth',3,'Color','r');
+        if TB_params.MULTICLASS == 1
+        text(clss_x(ii)+xsize+spacerx, clss_y(ii), ['C=',num2str(classes(ii))],'Color','white',...
+            'VerticalAlignment','middle','HorizontalAlignment','left',...
+            'Clipping', 'on');
+        end
+    end
+    else    % no previous comparison
     for ii = 1:length(clss_x)
         line([clss_x(ii)+xsize clss_x(ii)+xsize],[clss_y(ii)-ysize clss_y(ii)+ysize],'LineWidth',3,'Color','r');
         line([clss_x(ii)-xsize clss_x(ii)-xsize],[clss_y(ii)-ysize clss_y(ii)+ysize],'LineWidth',3,'Color','r');
         line([clss_x(ii)-xsize clss_x(ii)+xsize],[clss_y(ii)-ysize clss_y(ii)-ysize],'LineWidth',3,'Color','r');
         line([clss_x(ii)-xsize clss_x(ii)+xsize],[clss_y(ii)+ysize clss_y(ii)+ysize],'LineWidth',3,'Color','r');
+        if TB_params.MULTICLASS == 1
+        text(clss_x(ii), clss_y(ii)+ysize+spacery, ['C=',num2str(classes(ii))],'Color','white',...
+            'VerticalAlignment','bottom', 'HorizontalAlignment', 'center',...
+            'Clipping', 'on');
+        end
+    end
     end
     lab_colors{2} = 'Red';
 end
@@ -171,202 +281,4 @@ xlabel('Range (m)');
 ylabel('Along-Track (m)');
 axis image;
 axis xy;
-end
-
-function cm2 = change_cmap
-%
-% cm2(i, 1:3) = [R, G, B] of ith color in color map
-% i = 1, 2, ..., ncolors2
-
-cm1 = load('mstl_colors_ascii.txt', '-ASCII');
-
-ncolors1 = size(cm1, 1);
-
-% Boost or decrease RED
-cm_scale = 0.95;
-
-if cm_scale < 0, cm_scale = 0; end
-if cm_scale > 2, cm_scale = 2; end
-
-for i=2:ncolors1-1
-    if cm_scale <= 1
-        % Decrease RED
-        cm1(i,1)=cm_scale*cm1(i,1);
-    else
-        % Boost RED
-        cm1(i,1) = cm1(i,1) + (cm_scale - 1)*(1-cm1(i,1));
-    end
-end
-
-% Boost or decrease GREEN
-cm_scale = 1.1;
-
-if cm_scale < 0, cm_scale = 0; end
-if cm_scale > 2, cm_scale = 2; end
-
-for i=2:ncolors1-1
-    if cm_scale <= 1
-        % Decrease GREEN
-        cm1(i,2)=cm_scale*cm1(i,2);
-    else
-        % Boost GREEN
-        cm1(i,2) = cm1(i,2) + (cm_scale - 1)*(1-cm1(i,2));
-    end
-end
-%
-% interpolation section
-%
-% interpolation parameters:
-%           intensity     color_fraction
-% p(1,:) = [  inten_1,     color_frac_1;
-% p(2,:) = [  inten_2,     color_frac_2;
-%          :
-% p(num_nodes, :) = [inten_num_nodes,     color_frac_num_nodes]
-%
-% WARNING: p(i,1) must be strictly less than p(i+1,1)
-
-p = [0.00 0.00; 1.00 0.25; 1.01 0.25; 1.02 0.25; 8.00 1.00];
-
-num_nodes = size(p,1);
-ncolors2 = 256;
-
-intensity = p(1,1) + (0:ncolors2-1)*((p(end,1)-p(1,1))/(ncolors2-1));
-intensity(ncolors2) = p(end,1);
-
-cm2 = zeros(ncolors2, 3);
-
-for i2=1:ncolors2
-    for j=2:num_nodes
-        if intensity(i2) <= p(j,1),
-            color_value = p(j-1,2) + (p(j,2) - p(j-1,2))/(p(j,1) - p(j-1,1))*(intensity(i2) - p(j-1,1));
-            n1 = max( 1, min( ncolors1, 1.5 + (ncolors1-1)*color_value ) );
-            i1 = fix(n1);
-            frac_n1 = n1 - i1;
-            i1p1 = min(i1 + 1, ncolors1);
-            cm2(i2,:) = (1-frac_n1)*cm1(i1,:) + frac_n1*cm1(i1p1,:);
-            break
-        end
-    end
-end
-
-end
-
-function M = clip_image(M,varargin)
-% Suggested values are:
-%   clip_image(0.05,0.05,0.6,0.99,0.02,0.95)
-% or mimic the original clipping scheme
-%   clip_image(data,0.4,0.99,1,1,0.001,0.70)
-
-% Dynamic range compression for sas imagery.  Specificialy for cases where
-% gammaclip is not providing acceptable results.
-%
-% This algorithm stretches the dynamic range of typical bottom returns to
-% range between 0 and lowRangeMax.  The highlight dynamic range is also
-% stretched to range between upperRangeMin and 1.  The mid-intensity points
-% (clipBot to clipTop) dynamic range is compressed.
-% M --> data array
-if ~isempty(varargin)
-    lowRangeMax=varargin{1};% Upper limit of lower range return after adjustment
-else
-    lowRangeMax = 0.40;
-end
-if length(varargin)>1
-    lowerPercent=varargin{2};% Percent of values to be placed in the lower range
-else
-    lowerPercent = 0.99;% 99% of values will be in the lower range (i.e. 99% of return is from the bottom, 1% from target)
-end;
-if length(varargin)>2
-    midRangeMax=varargin{3};% Upper limit of mid range after adjustment
-else
-    midRangeMax = 1;% Default settings use only one partition
-end;
-if length(varargin)>3
-    midRangePercent=varargin{4};% Percent of values to be placed in the mid and lower range (cumulative)
-else
-    midRangePercent = 1;% Default settings use only one partition
-end;
-if length(varargin)>4
-    lowEndClip=varargin{5};% clipped minimum for intensity
-else
-    lowEndClip = .001;% Default setting does not clip the shadow
-end;
-if length(varargin)>5
-    highEndClip=varargin{6};% clipped maximum intensity
-else
-    highEndClip = 0.70;% Default setting does not clip the highlight
-end;
-
-
-
-M = abs(M);% Convert from imaginary to intensity only values
-M = M - min(min(M));% Scale values to range between 0  and 1
-M = M / max(max(M));
-
-% Create a histogram of the image intensities.  Rescale later based on
-% values corresponding to a particular percent of image pixels being below
-% a specified value.
-[counts,x] = imhist(M);
-sumCounts = cumsum(counts)/sum(counts);
-
-% Max low-range intensity before rescale
-clipBot = x(find(sumCounts>lowerPercent,1,'first'));
-
-% Max mid-range intensity before rescale
-clipMid = x(find(sumCounts>=midRangePercent,1,'first'));
-
-
-% % 2-part rescaling scheme:
-% M(M >= clipBot) = lowRangeMax + (1 - lowRangeMax) * (M(M >= clipBot) ...
-%     - clipBot) / (1 - clipBot);
-% 
-% M(M < clipBot) = lowRangeMax * M(M < clipBot) / clipBot;
-
-%==========================================================================
-% 3-Part rescaling scheme:
-%==========================================================================
-% First determine if the mid-range is getting larger or smaller.  This will
-% determine the order in which the sections are rescaled.
-
-% change in size = width of range (initial) - width of range (final)
-midRangeDifference = (clipMid-clipBot) - (midRangeMax - lowRangeMax);
-
-% If the mid-range is being compressed, then compress the mid-range and
-% expand the high-range data.
-if midRangeDifference > 0
-    % Expanding the mid-range and compressing the high range
-    % First expand the mid range intensities:
-    % Isolate the subset to be compressed:
-    %      subset = M(M >= clipBot & M <= clipTop)
-    % Scale subset to be between 0 and 1:  subset/subsetWidth
-    % Rescale subset to be between 0 and new subset max
-    %      subset = newMax*subset/subsetWidth
-    % Add max value of lower group (background) to make results continuous:
-    %      scaledSubset = scaledSubset + lowRangeMax
-    M(M >= clipBot & M <= clipMid) = lowRangeMax + ...
-        (midRangeMax - lowRangeMax) * (M(M >= clipBot & M <= clipMid) - clipBot) ...
-        /(clipMid - clipBot);
-
-    % Now rescale upper-range with a similar equation:
-    M(M > clipMid) = midRangeMax + (1 - midRangeMax) * (M(M > clipMid) ...
-        - clipMid) / (1 - clipMid);
-elseif midRangeDifference <= 0
-    %Scale the upper-range first, then the mid-range.
-    M(M > clipMid) = midRangeMax + (1 - midRangeMax) * (M(M > clipMid) ...
-        - clipMid) / (1 - clipMid);
-    % Scaling mid-range data
-    M(M >= clipBot & M <= clipMid) = lowRangeMax + ...
-        (midRangeMax - lowRangeMax) * (M(M >= clipBot & M <= clipMid) - clipBot) ...
-        /(clipMid - clipBot);
-end
-
-
-% Now expand intensities for the average bottom return to show bottom
-% detail.  Same procedure as above example.
-M(M < clipBot) = lowRangeMax * M(M < clipBot) / clipBot;
-
-% Now perform the final clip
-M(M<lowEndClip) = lowEndClip;
-M(M>highEndClip) = highEndClip;
-M = (M - lowEndClip)/(highEndClip - lowEndClip);
-
 end

@@ -84,7 +84,7 @@ for k = 1:length(file_list_roc)
 end
 delete(hand);
 
-C = confusionmat(all_gts,all_classes,'order',[1 0]);
+C = confusionmat(all_gts,min(all_classes,1),'order',[1 0]);
 sprintf('\n\n')
 disp('--------------------------------------------')
 disp(['- Diagnostic Table ', det_str,'/',cls_str  ' - '])

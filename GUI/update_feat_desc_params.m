@@ -26,7 +26,7 @@ TB_params.INV_IMG_ON = feat_desc_params.reqs_inv_img;
 if TB_params.INV_IMG_ON == 1
     assert(isfield(feat_desc_params, 'inv_img_modes'),...
         'about.txt must contain ''inv_img_mode'' strings.');
-    TB_params.INV_IMG_MODES = regexp(feat_desc_params.inv_img_modes, '(hf|HF|bb|BB)', 'match');
+    TB_params.INV_IMG_MODES = regexp(feat_desc_params.inv_img_modes, '(hf|HF|bb|BB|lf1|LF1)', 'match');
 end
 
 % Background snippet

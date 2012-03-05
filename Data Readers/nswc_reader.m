@@ -33,14 +33,6 @@ if data_present(1) && data_present(3)
     p.lat = data(1).lat;
     % longitude
     p.long = data(1).lon;
-    % groundtruth
-    if isempty(gtf)
-        p.havegt = 0;
-        p.gtimage = [];
-    else
-        p.havegt = 1;
-        p.gtimage = nswc_gt_reader(fn, 'PORT', gtf, TB_params.TB_HEAVY_TEXT);
-    end
     p.targettype = '???';
     % performance estimation parameters
     perf_p = struct;
@@ -55,6 +47,18 @@ if data_present(1) && data_present(3)
         p.mode = 'A';
     else
         p.mode = 'B';
+    end
+    % groundtruth
+    if isempty(gtf)
+        p.havegt = 0;
+        p.gtimage = [];
+    else
+        p.havegt = 1;
+        if TB_params.GT_FORMAT == 1
+            p.gtimage = nswc_gt_reader(fn, 'PORT', gtf, TB_params.TB_HEAVY_TEXT);
+        elseif TB_params.GT_FORMAT == 2
+            p.gtimage = latlong_gt_reader(p, gtf);
+        end
     end
 else
     p = [];

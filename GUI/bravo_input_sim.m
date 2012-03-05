@@ -318,7 +318,20 @@ while k <= k_end   % for each source image...
             p_in_struct = mats_struct_reader([sd,filesep,hi_sfnames{k}],...
                 gtf, TB_params); % this will need work once I get files from Brad
             p_in_struct.sensor = sensor;
-            keyboard
+            k = k+1;
+%             keyboard
+        case 11 %MST 
+            p_sfn = hi_sfnames{k};
+            s_sfn = hi_sfnames{k};
+            [p_in_struct,s_in_struct] = mst_reader(...
+                [sd,filesep,hi_sfnames{k}], gtf, TB_params);
+            if ~isempty(p_in_struct)
+                p_in_struct.sensor = sensor;
+            end
+            if ~isempty(s_in_struct)
+                s_in_struct.sensor = sensor;
+            end
+            k = k + 1;
         otherwise
             disp('Error: Invalid data format index.');
             return
@@ -342,7 +355,7 @@ while k <= k_end   % for each source image...
         allprev = contacts;
         if TB_params.TB_FEEDBACK_ON == 1
             % Get feedback
-            allprev = feedback_switch(allprev, TB_params);
+            allprev = feedback_switch(p_in_struct, allprev, TB_params);
         end
         
         % Save data to make ROC curve up to this point
@@ -371,7 +384,7 @@ while k <= k_end   % for each source image...
         allprev = contacts;
         if TB_params.TB_FEEDBACK_ON == 1
             % Get feedback
-            allprev = feedback_switch(allprev, TB_params);
+            allprev = feedback_switch(s_in_struct, allprev, TB_params);
         end
         
         % Save data to make ROC curve up to this point
@@ -426,27 +439,12 @@ if TB_params.TB_FEEDBACK_ON == 1 && TB_params.SKIP_FEEDBACK ~= 2
     end
 end
 
-%%% Contact correlation
-if TB_params.CONTCORR_ON
-    set(sbar.hlabel, 'String', 'Contact correlation...');
-    hcor = TB_params.CC_HANDLES{TB_params.CONTCORR};
-    if ~isdeployed
-        temp = func2str(hcor);
-        cor_folder = temp(5:end);
-        cor_paths = genpath([TB_params.TB_ROOT,filesep,'Contact Correlation',filesep,cor_folder]);
-        addpath(cor_paths);
-    end
-    fprintf(1,'Launching contact correlation (%s)...\n',func2str(hcor));
-    mine_ind = arrayfun(@(a) (a.class == 1 || (~isempty(a.gt) && a.gt == 1)),contacts);
-    contacts(mine_ind) = hcor(contacts(mine_ind));
-    % contacts = hcor(contacts);
-    if ~isdeployed
-        rmpath(cor_paths);
-    end
-end
-
 %%% Compare results to the groundtruth file, if such file has been selected
 if ~isempty(gtf)
+    if TB_params.GT_FORMAT == 2 %%% FIX THIS LATER
+        warning('function ''compare_results'' is not compatible with lat/long GT files');
+        compare_results_latlong(gtf, contacts, '', hi_sfnames);
+    else
     % Break source directory path into chunks
     sd_chunks = regexp(sd, (filesep), 'split');
     % Get timestamp string
@@ -456,6 +454,44 @@ if ~isempty(gtf)
         TB_params.DATA_FORMAT, hi_sfnames(k_init:k_end));
     % Results are now stored in file with name:
     %   'Subdir DDMonYYYY HHMMSS.txt'
+    end
+end
+
+%%% Contact correlation
+if TB_params.CONTCORR_ON
+    set(sbar.hlabel, 'String', 'Contact correlation...');
+    % Add contact correlation files to path
+    hcor = TB_params.CC_HANDLES{TB_params.CONTCORR};
+    if ~isdeployed
+        temp = func2str(hcor);
+        cor_folder = temp(5:end);
+        cor_paths = genpath([TB_params.TB_ROOT,filesep,'Contact Correlation',filesep,cor_folder]);
+        addpath(cor_paths);
+    end
+	% Reconstruct contact list from saved extra contact data files
+    mine_ind = arrayfun(@(a) (a.class >= 1 || (~isempty(a.gt) && a.gt == 1)),contacts);
+    ecd_fns = {contacts.ecdata_fn};
+    sel_ecdata = struct([]);
+    for q = find(mine_ind)
+        sel_ecdata = [sel_ecdata, read_extra_cdata(ecd_fns{q})];
+    end
+    % Launch contact correlation module
+    fprintf(1,'Launching contact correlation (%s)...\n',func2str(hcor));
+    % DK: does the restructuring completely change the output of the CC
+    % code?  All of the output fields are in the ecdata.  If the inputs
+    % that the CC code requires is also all in the ecdata, then I really
+    % don't have to pass in the contact list at all, just the appropriate
+    % array of ecdata.
+    
+    sel_ecdata = hcor(contacts(mine_ind), sel_ecdata);
+    % Update saved ecd files
+    write_all_ecdata(contacts(mine_ind), sel_ecdata);
+    
+%     % Old CC function call    
+%     contacts(mine_ind) = hcor(contacts(mine_ind));
+    if ~isdeployed
+        rmpath(cor_paths);
+    end
 end
 
 set(sbar.hpatch, 'XData', [0,0,1,1]);
@@ -495,7 +531,7 @@ toc
     end
 
 % Subroutine for feedback step
-    function allprev = feedback_switch(allprev, TB_params)
+    function allprev = feedback_switch(input, allprev, TB_params)
         %%% OPERATOR FEEDBACK
         fprintf(1, ' Size of contacts: %d\n\n\n', length(contacts));
         switch TB_params.SKIP_FEEDBACK
@@ -505,8 +541,10 @@ toc
                 allprev = import_opfile(allprev);
             case 0
                 % use feedback stub gui
-                fprintf(1, '%-s\n', 'Operator feedback (from stub GUI)...');
-                allprev = opfeedback_stub(allprev, TB_params);
+                fprintf(1, '%-s\n', 'Operator feedback (from new GUI)...');
+                allprev = opfeedback_display_gui(input, allprev, TB_params);
+%                 fprintf(1, '%-s\n', 'Operator feedback (from stub GUI)...');
+%                 allprev = opfeedback_stub(allprev, TB_params);
             case 3
                 % use gt values for operator calls
                 fprintf(1, '%-s\n', 'Operator feedback (from GT data)...');
@@ -551,8 +589,8 @@ toc
                     % ignore, might as well quit
                     % however, there may or may not be leftover contacts,
                     % so fill those in first
-                    for q = cind:length(contacts)
-                        contacts(q).opfeedback.opconf = 0;
+                    for w = cind:length(contacts)
+                        contacts(w).opfeedback.opconf = 0;
                         disp('0 fill');
                     end
                     return

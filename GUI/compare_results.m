@@ -13,6 +13,7 @@ function compare_results(gt_file, c_list, out_file, fmt_index, hi_sfnames)
 
 if isempty(c_list), return, end
 % Load groundtruth data
+ecdata = read_extra_cdata(c_list(1).ecdata_fn);
 gtf_id = fopen(gt_file);
 gt_data = struct('xs',[],'ys',[],'codes',[],'fns',{},'scores',[],'sides',[]);
 % gt_cnt = 1;
@@ -27,7 +28,7 @@ while 0 == 0
             fn_i = fscanf(gtf_id, '%s', 1);
             score_i = fscanf(gtf_id, '%f', 1);
             side_i = fn_i((end-8):(end-5));
-        case {2,3,4,6,7,8,9}
+        case {2,3,4,6,8,9}
             [x_i,count] = fscanf(gtf_id,'%f',1);	% test for another line
             if count ~= 1, break; end               % no line exists
             y_i = fscanf(gtf_id,'%f',1);
@@ -35,7 +36,20 @@ while 0 == 0
             side_i = fscanf(gtf_id,'%s',1);
             fn_i = fscanf(gtf_id,'%s',1);
             %     score_i = [];
-        case 5 %HDF5
+        case {5,10} %HDF5
+            [x_i,count] = fscanf(gtf_id,'%f',1);	% test for another line
+            if count ~= 1, break; end               % no line exists
+            y_i = fscanf(gtf_id,'%f',1);
+            code_i = fscanf(gtf_id,'%s',1);
+            if x_i < 0
+                side_i = 'Port';
+            else
+                side_i = 'Stbd';
+            end
+            x_i = abs(x_i);
+            fn_i = fscanf(gtf_id,'%s',1);
+            
+        case 7 %ET
             [x_i,count] = fscanf(gtf_id,'%f',1);	% test for another line
             if count ~= 1, break; end               % no line exists
             y_i = fscanf(gtf_id,'%f',1);
@@ -99,7 +113,7 @@ gt_data.sides = gt_data.sides(run_mask == 1);
 
 % Define tolerances for what constitutes a match
 % x_tol = 2; y_tol = 2;
-x_tol = 150; y_tol = 150;
+x_tol = 5/ecdata.hf_cres; y_tol = 5/ecdata.hf_ares;
 % x_tol = 250; y_tol = 250;
 match_indicies = zeros(size(c_list));
 % For each contact in the contact list...
@@ -127,8 +141,10 @@ for q = 1:length(c_list)
     if isempty(match_ind)
         match_indicies(q) = -1;
     else
-        % store index corresponding to gt entry that matches
-        match_indicies(q) = match_ind(1);
+        % store index corresponding to gt entry that is the closest match
+        diffs = ( (gt_data.xs(match_ind) - c_list(q).x).^2 + (gt_data.ys(match_ind) - c_list(q).y).^2 ) .^0.5;
+        [~,temp] = min(diffs);
+        match_indicies(q) = match_ind(temp(1));
     end
 end
 
@@ -176,11 +192,11 @@ fclose(w_id);
             end
             if match_indicies(qq) == -1
                 fprintf(fid,'%s C#%03d @ (%4d,%4d) -------- ......No match......\n',...
-                    char( (c_list(qq).class == 1)*'x' + (c_list(qq).class == 0)*' ' ),...
+                    char( (c_list(qq).class >= 1)*'x' + (c_list(qq).class == 0)*' ' ),...
                     qq, c_list(qq).x, c_list(qq).y);
             else
                 fprintf(fid,'%s C#%03d @ (%4d,%4d) -------- GT#%03d @ (%4d,%4d)\n',...
-                    char( (c_list(qq).class == 1)*'x' + (c_list(qq).class == 0)*' ' ),...
+                    char( (c_list(qq).class >= 1)*'x' + (c_list(qq).class == 0)*' ' ),...
                     qq, c_list(qq).x, c_list(qq).y, match_indicies(qq), gt_data.xs(match_indicies(qq)),...
                     gt_data.ys(match_indicies(qq)));
             end

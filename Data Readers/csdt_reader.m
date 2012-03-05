@@ -34,7 +34,13 @@ p.long = mean(arrayfun(@(a) (a.lng), data2));
 %Heading THIS VALUE CHANGES SLIGHTLY
 p.heading = mean(arrayfun(@(a) (a.head), data2));
 p.targettype = '???';
-
+% filling in blank parameters that are not part of ET
+p.bb = [];
+p.bb_cnum = 0;
+p.bb_anum = 0;
+p.bb_cres = 0;
+p.bb_ares = 0;
+p.time = 0;
 %Performance estimation variables
 perf_p = struct;
 perf_p.depth = mean(arrayfun(@(a) (a.depth), data2));
@@ -48,14 +54,17 @@ else
     p.mode = 'B';
 end
 
-
+% gt
 if isempty(gtf)
     p.havegt = 0;
     p.gtimage = [];
 else
-    error('Reader does not exist for this data type.');
-%     p.havegt = 1;
-%     p.gtimage = nurc_reader(fname, port_or_stbd, gtf, show_details);
+    p.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        p.gtimage = et_gt_reader(fname, 'Port', gtf, 0);
+    elseif TB_params.GT_FORMAT == 2
+        p.gtimage = latlong_gt_reader(p, gtf);
+    end
 end
 
 
@@ -79,7 +88,13 @@ s.long = mean(arrayfun(@(a) (a.lng), data2));
 %Heading THIS VALUE CHANGES SLIGHTLY
 s.heading = mean(arrayfun(@(a) (a.head), data2));
 s.targettype = '???';
-
+% filling in blank parameters that are not part of ET
+s.bb = [];
+s.bb_cnum = 0;
+s.bb_anum = 0;
+s.bb_cres = 0;
+s.bb_ares = 0;
+s.time = 0;
 %Performance estimation variables
 perf_s = struct;
 perf_s.depth = mean(arrayfun(@(a) (a.depth), data2));
@@ -92,13 +107,18 @@ else
     s.mode = 'B';
 end
 
+% gt
 if isempty(gtf)
     s.havegt = 0;
     s.gtimage = [];
 else
-    error('Reader does not exist for this data type.');
-%     s.havegt = 1;
-%     s.gtimage = nurc_reader(fname, port_or_stbd, gtf, show_details);
+    s.havegt = 1;
+    if TB_params.GT_FORMAT == 1
+        s.gtimage = et_gt_reader(fname, 'Stbd', gtf, 0);
+    elseif TB_params.GT_FORMAT == 2
+        s.gtimage = latlong_gt_reader(s, gtf);
+    end
 end
+
 end
 

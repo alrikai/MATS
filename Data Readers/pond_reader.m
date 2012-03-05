@@ -40,15 +40,6 @@ p.SASInfo.f0 = SASInfo.f0;
 
 p.SASInfo.Bw = SASInfo.Bw;
 
-if isempty(gtf)
-    p.havegt = 0;
-    p.gtimage = [];
-else
-    error('Reader does not exist for this data type.');
-%     p.havegt = 1;
-%     p.gtimage = nurc_reader(fname, port_or_stbd, gtf, show_details);
-end
-
 %Vehicle latitude, longitude, orientation, and targettype
 p.lat = 30.1699;
 p.long = -85.7523;
@@ -69,5 +60,17 @@ else
     p.mode = 'B';
 end
 
+% gt
+if isempty(gtf)
+    p.havegt = 0;
+    p.gtimage = [];
+else
+    if TB_params.GT_FORMAT == 1
+        error('Reader does not exist for this data type.');
+    elseif TB_params.GT_FORMAT == 2
+        p.havegt = 1;
+        p.gtimage = latlong_gt_reader(p, gtf);
+    end
+end
 
 s = [];

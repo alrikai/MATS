@@ -1,10 +1,10 @@
-function out = feature_snippet(in)
+function features = feature_snippet(hfsnippet, bbsnippet)
 
 %% Tucker MCA Features
-X = formchannel( img_trim(in.hfsnippet,6,4), 6, 4); %SSAM
-Y = formchannel( img_trim(in.bbsnippet,2,8), 2, 8);
-% X = formchannel(in.hfsnippet,6,4); %SSAM
-% Y = formchannel(in.bbsnippet,2,8);
+X = formchannel( img_trim(hfsnippet,6,4), 6, 4); %SSAM
+Y = formchannel( img_trim(bbsnippet,2,8), 2, 8);
+% X = formchannel(hfsnippet,6,4); %SSAM
+% Y = formchannel(bbsnippet,2,8);
 
 [X, meanX] = remmean(X);
 [Y, meanY] = remmean(Y);
@@ -14,20 +14,19 @@ W{2} = double(X.');
 
 [a,L] = mca(W);
 ks = diag(abs(L));
-shf = allstats(abs(in.hfsnippet(:))); %F <--make vectors?
-sbb = allstats(abs(in.bbsnippet(:))); %F
+shf = allstats(abs(hfsnippet(:)));
+sbb = allstats(abs(bbsnippet(:)));
 tucker_features = [ks; shf.mean; shf.var; shf.skew; shf.kurt; sbb.mean; sbb.var; sbb.skew; sbb.kurt];
 
 %% Isaacs Features
 FILTERS = 0;  %dummy for Filter bank (default is none)
 bins = 20;
 method = 1; %dummy for selection (default is all)
-ani = double(abs(in.hfsnippet));
+ani = double(abs(hfsnippet));
 LMSFeatVect1 = makeFeatVect1(ani,FILTERS,bins,method)';
-ani = double(abs(in.bbsnippet));
+ani = double(abs(bbsnippet));
 LMSFeatVect2 = makeFeatVect1(ani,FILTERS,bins,method)';
-out = in;
-out.features = [LMSFeatVect1; LMSFeatVect2; tucker_features];
+features = [LMSFeatVect1; LMSFeatVect2; tucker_features];
 
 end
 

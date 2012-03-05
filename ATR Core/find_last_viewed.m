@@ -1,6 +1,6 @@
 function lastview_index = find_last_viewed(contacts, new_img_ind, show_details)
-% Determine last contact that the operator saw.  Start at the beginning of
-% this image and move backward through the list until get to a negative
+% Determine last contact that the operator saw.  Start at the first contact
+% from this image and move backward through the list until: get to a negative
 % value of opdisplay or before the beginning of the list (0) if none
 % viewed
 

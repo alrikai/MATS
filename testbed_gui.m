@@ -2,11 +2,10 @@ function testbed_gui(varargin)
 % GUI for the ATR Testbed
 %
 % This GUI serves as a front end to the ATR testbed, facilitating its
-% configuration and execution.  It is tentatively complete for the one
-% detector, one classifier case.
+% configuration and execution.
 %
 % Derek Kolacinski, NSWC PC (derek.kolacinski@navy.mil)
-% Last update: 1 Sept. 2011
+% Last update: 29 Feb 2012
 
 % This GUI has been modularized so that it is easy to add another item to
 % the GUI if necessary.  To add:
@@ -15,22 +14,21 @@ function testbed_gui(varargin)
 % 2) Add a call to the appropriate subroutine to make item.
 % 3) Restart the GUI.  Everything else should take care of itself.
 
-close all; %clearvars -except varargin; %Removed 'clearvars' not in older versions
-tic;
+close all; clearvars -except varargin; tic;
 
-gui_vsn = '1.0.1'; gui_bdate = '27 Oct 2011';
+gui_vsn = '1.1.0'; gui_bdate = '29 Feb 2012';
 
 % Valid file formats (listed in drop down menu)
 file_formats = {'Old .mat (Bravo)', 'Mymat', 'Scrub .mat', 'NSWC .mat',...
     'HDF5', 'NURC .mat (MUSCLE)','CSDT', 'POND', 'PC SWAT Imagery .mat',...
-    'MATS input struct'};
+    'MATS input struct','MSTL .mst'};
 % Valid sensor formats (listed in drop down menu)
-sensor_formats = {'ONR SSAM', 'ONR SSAM2', 'SSAM III', 'MUSCLE', 'EDGETECH', 'MK 18 mod 2'};
+sensor_formats = {'ONR SSAM', 'ONR SSAM2', 'SSAM III', 'MUSCLE', 'EDGETECH', 'MK 18 mod 2', 'MARINESONIC'};
 
 infilelist = {};
 
-src_dir = '';               % directory of source images
-out_dir = '';               % directory for output files to be stored
+% src_dir = '';               % directory of source images
+% out_dir = '';               % directory for output files to be stored
 gt_file = '';               % file location of the groundtruth file
 sens_init = 1;
 sensor = sensor_formats{sens_init};
@@ -58,7 +56,7 @@ param_numitems = 7;         % # of items in param subpanel
 atr_subp_h = 22;            % height of item in atr subpanel
 atr_numitems = 9;           % # of items in atr subpanel
 io_subp_h = 22;             % height of item in I/O subpanel
-io_numitems = 7;            % # of items in I/O subpanel
+io_numitems = 8;            % # of items in I/O subpanel
 plot_subp_h = 22;           % height of items in plot options subpanel
 plot_numitems = 4;          % # of items in plot options subpanel
 
@@ -167,16 +165,25 @@ TB_params = struct('TB_HEAVY_TEXT', 0,...
     'FEAT_HANDLES',{hfeat},...
     'INV_IMG_ON', 0,...
     'INV_IMG_MODES', {{}},...
-    'BG_SNIPPET_ON', 0);
+    'BG_SNIPPET_ON', 0,...
+    'BURIED_MODE', 0,...
+    'MULTICLASS', 0,...
+    'SRC_DIR','',...
+    'OUT_DIR','',...
+    'ECD_DIR','',...
+    'TEMP_DIR','',...
+    'GT_FORMAT', 1);
 end
 
 % Classifier data files  (displayed in ATR selection panel)
 [TB_params.CDATA_FILES, TB_params.CLASS_DATA] = ...
     import_classdata(TB_params.CLS_HANDLES{TB_params.CLASSIFIER}, TB_params.TB_ROOT);
-% Initial description data for classifier
-[feat_desc_params, TB_params] = update_feat_desc_params(TB_params, feat_list);
-% Initial description data for classifier
-[cls_desc_params, TB_params] = update_cls_desc_params(TB_params, class_list);
+% Initial description data for detectors
+[det_desc_params, TB_params] = update_all_det_desc_params(TB_params, det_list);
+% Initial description data for classifiers
+[feat_desc_params, TB_params] = update_all_feat_desc_params(TB_params, feat_list);
+% Initial description data for classifiers
+[cls_desc_params, TB_params] = update_all_cls_desc_params(TB_params, class_list);
 
 if TB_params.TB_HEAVY_TEXT == 1
     fprintf(1,'** Available Modules:\n  Detectors:\n');
@@ -188,9 +195,11 @@ if TB_params.TB_HEAVY_TEXT == 1
 end
 
 % GUI frame
-f = figure('Visible', 'on', 'Position', [100,200,win_init]);
-% set(0,'DefaultUIControlFontSize',12)
-% set(0,'DefaultUIPanelFontSize',12)
+f = figure('Visible', 'on', 'Position', [100,160,win_init], 'Tag', 'Static');
+if ismac
+    set(0,'DefaultUIControlFontSize',12);
+    set(0,'DefaultUIPanelFontSize',12);
+end
 
 % Background panel - show static background (currently has no visible effect) 
 hbground = uipanel('Units', 'pixels','Position', [0,0,win_w,super_h]);
@@ -226,8 +235,12 @@ mod_pos = [0, subp_size(2)+inbuff, 0, 0];
 % Ground truth display field
 [junk,hgtstr] = config_text_panel(hiopanel, base_pos - 5*mod_pos,...
     'Groundtruth filename:', {@gtfile_clbk}, 'io');
+% - Ground truth format
+gt_fmt_strs = {'Native format'; 'Lat/long list'};
+[junk,hgtfmt] = config_popup_panel(hiopanel, 'GT_FORMAT',...
+    base_pos - 6*mod_pos, 80, 'Format:', gt_fmt_strs, 0, 1, indent_w, 'io'); 
 % Output directory display field
-[junk,houtstr] = config_text_panel(hiopanel, base_pos - 6*mod_pos,...
+[junk,houtstr] = config_text_panel(hiopanel, base_pos - 7*mod_pos,...
     '*Output directory:', {@outputdir_clbk}, 'io');
 
 % Detector/Classifier Selection %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -294,7 +307,7 @@ mod_pos = [0, subp_size(2)+inbuff, 0, 0];
 % - Feedback mode dropdown menu
 [junk,hpopskipfeed]= config_popup_panel(hparampanel, 'SKIP_FEEDBACK',...
     base_pos - 4*mod_pos, 105, 'Feedback Mode:',...
-    {'Use feedback stub GUI (series)', 'Simulate operator feedback w/ archive',...
+    {'Use feedback GUI (series)', 'Simulate operator feedback w/ archive',...
       'Skip feedback completely', 'Simulate operator feedback w/ GT data',...
       'Use SIG GUI (parallel) [STUB]'}, 1, 3, indent_w, 'param TB_FEEDBACK_ON_sub');
 % - Operator mode dropdown menu 
@@ -340,7 +353,7 @@ mod_pos = [0, subp_size(2)+inbuff, 0, 0];
     'plot PLOTS_ON_sub');
 % - Save image checkbox
 [junk,himgsave] = config_chkbox_panel(hplotpanel, 'SAVE_IMAGE',...
-    base_pos - 3*mod_pos, 'Save .jpg image', indent_w,...
+   base_pos - 3*mod_pos, 'Save .jpg image', indent_w,...
     'plot PLOTS_ON_sub');
 
 fix_item_visibility(TB_params);
@@ -375,6 +388,8 @@ uimenu(hmenu_config, 'Label', 'Retrain Classifier...', 'Separator', 'on',...
      'Callback', {@train_clbk});
 uimenu(hmenu_config, 'Label', 'Use Built-In Config.', 'Separator', 'on',...
     'Checked', 'off', 'Callback', {@nsammode_clbk});
+uimenu(hmenu_config, 'Label', 'Buried mode', 'Separator', 'off',...
+    'Checked', 'off', 'Callback', {@buried_clbk});
 % Analysis
 hmenu_analysis = uimenu('Label', 'Analysis');
 uimenu(hmenu_analysis, 'Label', 'Ground Truth Analysis...', 'Callback', {@gt_analysis_clbk});
@@ -385,6 +400,9 @@ uimenu(hmenu_analysis, 'Label', 'Generate Confusion Matrix...', 'Callback', {@co
 hmenu_sort = uimenu(hmenu_analysis, 'Label', 'Print Sorted Contact List');
 uimenu(hmenu_sort, 'Label', 'Show pixel coordinates...', 'Callback', {@sort_clist_clbk});
 uimenu(hmenu_sort, 'Label', 'Show lat/longs...', 'Callback', {@sort_clist_clbk_ll});
+% Tools
+hmenu_tools = uimenu('Label','Tools');
+uimenu(hmenu_tools, 'Label', 'Convert lat/long GT to pixel GT','Callback',{@gt_conv_clbk});
 % Help
 hmenu_help = uimenu('Label', 'Help');
 uimenu(hmenu_help, 'Label', 'MATS Documentation', 'Callback', {@help_clbk});
@@ -433,7 +451,7 @@ subpanel = uipanel('Units', 'pixels', 'Parent', parent,...
 uicontrol('Style', 'text', 'String', text_string,...
     'HorizontalAlignment', 'left', 'Parent', subpanel,...
     'Position', [indent+2, 4, text_w, 16], 'Tag', tag);
-pop = uicontrol('Style', 'popupmenu', 'String', pop_strings,... 
+pop = uicontrol('Style', 'popupmenu', 'String', pop_strings,...  
     'Position', [indent+1+inbuff+text_w, 5, position(3)-indent-inbuff-text_w, position(4)-4],...
     'Callback', {@config_popup_clbk, offset}, 'Tag', tag,...
     'UserData', fieldname, 'Parent', subpanel, 'Value', initval);
@@ -529,7 +547,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%% CALLBACK FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Callback for scroll bar
-function scroll_clbk(src,junk)
+function scroll_clbk(src,junk) %#ok<*INUSD>
 y_offset = get(src, 'Value') * (super_h - win_h);
 set(hscrpanel, 'Position', [0, 0, [scroll_px,scroll_px]] - [0,y_offset,0,0]);
 end
@@ -539,12 +557,12 @@ function range_init(hobj,junk)
 % When a file is selected from the file selection dropdown menu, set
 % initial file range indices.
 val = get(hobj,'Value');
-if val == 1 % range selection mode
+if val == 1 % range selection mode; initialize to all files
     set(hfrng1, 'String', num2str(1));
     set(hfrng2, 'String', num2str(length(infilelist)));
     TB_params.DATA_RANGE = [1, length(infilelist)];
     tag_hide_show('range', 'on');
-else
+else        % individual file mode
     tag_hide_show('range', 'off');
     set(hfrng1, 'String', num2str(val-1));
     set(hfrng2, 'String', num2str(val-1));
@@ -560,7 +578,7 @@ if ~isnan(num) % is a number
         % too small, use 1 instead and change displayed value to show this
         TB_params.DATA_RANGE(1) = 1;
         set(hobj, 'String', '1');
-    else
+  else
         TB_params.DATA_RANGE(1) = num;
     end
 end
@@ -584,8 +602,9 @@ end
 function saveconfig_clbk(junk, junk2)
     [config_fn, config_path] = uiputfile({'*.mat'});
     if sum(config_fn == 0) == 0
+        config_vsn = 2;
         save([config_path, filesep, config_fn],...
-            'src_dir', 'gt_file', 'out_dir', 'sensor', 'TB_params')
+            'sensor', 'TB_params', 'config_vsn')
         if TB_params.TB_HEAVY_TEXT == 1
             fprintf(1,'Config. file %s saved.\n', config_fn);
         end
@@ -596,14 +615,23 @@ end
 function loadconfig_clbk(junk, junk2)
     [config_fn, config_path] = uigetfile({'*.mat'});
     if sum(config_fn == 0) == 0
-        new_config = load([config_path, filesep, config_fn],...
-            'src_dir', 'gt_file', 'out_dir', 'sensor', 'TB_params');
+        new_config = load([config_path, filesep, config_fn]);
+        % src_dir, gt_file, out_dir, sensor, and TB_params loaded (v1)
+        % gt_file, sensor, TB_params, config_vsn loaded (v2)
+        
+        TB_params = new_config.TB_params;
         % Update source directory display label, shortening if necessary
-        src_dir = new_config.src_dir;
-        set(hsrcstr,'String', abbrev_string(src_dir,25));
+        if ~isfield(new_config,'config_vsn') % v1
+            TB_params.SRC_DIR = new_config.src_dir;
+            TB_params.OUT_DIR = new_config.out_dir;
+        else
+            % v2 already taken care of
+        end
+%         src_dir = new_config.src_dir;
+        set(hsrcstr,'String', abbrev_string(TB_params.SRC_DIR, 25));
         % Update output directory display label, shortening if necessary
-        out_dir = new_config.out_dir;
-        set(houtstr,'String', abbrev_string(out_dir,25));
+%         out_dir = new_config.out_dir;
+        set(houtstr,'String', abbrev_string(TB_params.OUT_DIR, 25));
         % Update gt file display label, shortening if necessary
         gt_file = new_config.gt_file;
         set(hgtstr, 'String', abbrev_string(gt_file, 25));
@@ -612,7 +640,6 @@ function loadconfig_clbk(junk, junk2)
         temp = find( cellfun(@(a) (strcmpi(a,sensor)), sensor_formats) );
         set(hsensformats, 'Value', temp);
         % Update parameters and corresponding GUI fields
-        TB_params = new_config.TB_params;
         tbr = fileparts(mfilename('fullpath'));
         TB_params.TB_ROOT = tbr;
         [junk,file,ext] = fileparts(TB_params.FEEDBACK_PATH);
@@ -633,7 +660,7 @@ function loadconfig_clbk(junk, junk2)
         % Update ATR components for GUI lists - determine the desired
         % component from the old list and then find its position in the new
         % list; this prevents saved config from breaking when components
-        % are added to the testbed.
+       % are added to the testbed.
         % Detector
         des_det_hstr = func2str(TB_params.DET_HANDLES{TB_params.DETECTOR});
         [new_det_hstrs, TB_params.DET_HANDLES] = import_modules(tbr, 'det');
@@ -641,6 +668,7 @@ function loadconfig_clbk(junk, junk2)
         if isempty(TB_params.DETECTOR) % desired file has disappeared
             TB_params.DETECTOR = 1;
         end
+        det_desc_params = update_all_det_desc_params(TB_params, new_det_hstrs);
         set(hpopdet, 'String', new_det_hstrs);
         set(hpopdet, 'Value', TB_params.DETECTOR);
         clear des_det_hstr new_det_hstrs;
@@ -651,6 +679,7 @@ function loadconfig_clbk(junk, junk2)
         if isempty(TB_params.FEATURES) % desired file has disappeared
             TB_params.FEATURES = 1;
         end
+        feat_desc_params = update_all_feat_desc_params(TB_params, new_feat_hstrs);
         set(hpopfeat, 'String', new_feat_hstrs);
         set(hpopfeat, 'Value', TB_params.FEATURES);
         clear des_feat_hstr new_feat_hstrs;
@@ -661,6 +690,7 @@ function loadconfig_clbk(junk, junk2)
         if isempty(TB_params.CLASSIFIER) % desired file has disappeared
             TB_params.CLASSIFIER = 1;
         end
+        cls_desc_params = update_all_cls_desc_params(TB_params, new_cls_hstrs);
         set(hpopclass, 'String', new_cls_hstrs);
         set(hpopclass, 'Value', TB_params.CLASSIFIER);
         clear des_cls_hstr new_cls_hstrs;
@@ -672,7 +702,7 @@ function loadconfig_clbk(junk, junk2)
         if isempty(TB_params.CLASS_DATA) % desired file has disappeared
             TB_params.CLASS_DATA = 1;
         end
-        set(hpopcdata, 'String', TB_params.CDATA_FILES);
+         set(hpopcdata, 'String', TB_params.CDATA_FILES);
         set(hpopcdata, 'Value', TB_params.CLASS_DATA);
         clear des_cdata_str;
         % Performance estimation
@@ -708,6 +738,27 @@ function loadconfig_clbk(junk, junk2)
         end
         set(himgsave, 'Value', TB_params.SAVE_IMAGE);
         
+        if ~isfield(TB_params,'BURIED_ONLY')
+            TB_params.BURIED_ONLY = 0;
+        end
+        if ~isfield(TB_params,'MULTICLASS')
+            TB_params.MULTICLASS = 0;
+        end
+         if ~isfield(TB_params,'ECD_DIR')
+            TB_params.ECD_DIR = [TB_params.OUT_DIR,filesep,'ecd'];
+        elseif isempty(TB_params,'ECD_DIR')
+            TB_params.ECD_DIR = [TB_params.OUT_DIR,filesep,'ecd'];
+        end
+        if ~isfield(TB_params,'TEMP_DIR')
+            TB_params.TEMP_DIR = [TB_params.OUT_DIR,filesep,'temp'];
+        elseif isempty(TB_params,'ECD_DIR')
+            TB_params.TEMP_DIR = [TB_params.OUT_DIR,filesep,'temp'];
+        end
+        if ~isfield(TB_params,'GT_FORMAT')
+            TB_params.GT_FORMAT = 1;
+        end
+            
+        
         if TB_params.SKIP_DETECTOR == 1
             tag_hide_show('preproc', 'off')
             TB_params.MAN_ATR_SEL = 1;
@@ -721,10 +772,11 @@ function loadconfig_clbk(junk, junk2)
             end
         end
         
+        % Make sure that non-applicable options are grayed out properly
         fix_item_visibility(TB_params);
         
         % Populate file selection menu
-        populate_filelist(hfilesel, src_dir, TB_params.DATA_FORMAT);
+        populate_filelist(hfilesel, TB_params.SRC_DIR, TB_params.DATA_FORMAT);
         % Initialize file indicies
         if isfield(TB_params, 'DATA_RANGE')
             set(hfrng1, 'String', num2str(TB_params.DATA_RANGE(1)));
@@ -736,8 +788,52 @@ function loadconfig_clbk(junk, junk2)
             set(hfrng2, 'String', num2str(length(infilelist)));
         end
         % Check if enough data is entered to run ATR
-        check_ins(src_dir, out_dir, TB_params, hgobutton);
+        check_ins(TB_params, hgobutton);
     end
+end
+
+% Callback for activating buried mode
+function buried_clbk(hobj, junk)
+    chk_status = get(hobj, 'Checked');
+    if strcmp(chk_status, 'on'); % turning buried mode off
+        set(hobj, 'Checked', 'off');
+        TB_params.BURIED_MODE = 0;
+    else
+        set(hobj, 'Checked', 'on');
+        TB_params.BURIED_MODE = 1;
+    end
+    
+    if TB_params.BURIED_MODE == 1
+        % Filter detector modules
+        mask = zeros(1, length(det_desc_params));
+        for q = 1:length(mask)
+            if isfield(det_desc_params{q},'for_buried')
+                temp = bin_equiv(det_desc_params{q}.for_buried);
+                mask(q) = max(0, temp); % -1 -> 0
+            else    % not specified, assume incompatible
+                mask(q) = 0;
+            end
+        end
+        % autoselect module
+        if mask(TB_params.DETECTOR) == 1    % selected det is ok
+            temp = cumsum(mask);    % use index of this det
+            new_ind = temp(TB_params.DETECTOR);
+        else                                % selected det removed from list
+            new_ind = 1; 
+        end
+        TB_params.DET_HANDLES = TB_params.DET_HANDLES(mask==1);
+        TB_params.DETECTOR = new_ind; 
+        set(hpopdet, 'String', det_list(mask==1), 'Value', new_ind);
+    else
+        % Revert to original detector list
+        list_str = get_detlistname(TB_params);
+        new_ind = find( cellfun(@(a) (strcmp(a,list_str)), det_list) );
+       assert(length(new_ind) == 1);
+        TB_params.DET_HANDLES = hdet;
+        TB_params.DETECTOR = new_ind;
+        set(hpopdet, 'String', det_list, 'Value', new_ind);
+    end
+    
 end
 
 % Callback for activating NSAM mode
@@ -762,7 +858,7 @@ function nsammode_clbk(hobj, junk)
     end
     
     % Check if enough data is entered to run ATR
-    check_ins(src_dir, out_dir, TB_params, hgobutton);
+    check_ins(TB_params, hgobutton);
 end
 
 % Callback for plot options checkboxes
@@ -774,7 +870,7 @@ end
 
 % Callback for drop-down menu
 function config_popup_clbk(hobj, junk, offset)
-    % On change of file format drop down, determine which one was selected
+  % On change of file format drop down, determine which one was selected
     % so that the proper reader can be used later
     % offset is used to shift field that can have a zero value, since the
     % indexing of the drop down elements start at 1.
@@ -783,21 +879,23 @@ function config_popup_clbk(hobj, junk, offset)
     TB_params.(param_name) = val - offset;
     if strcmp(param_name, 'DATA_FORMAT')
         % Update list of available files in GUI
-        populate_filelist(hfilesel, src_dir, TB_params.DATA_FORMAT);
+        populate_filelist(hfilesel, TB_params.SRC_DIR, TB_params.DATA_FORMAT);
+        range_init(hfilesel);
     elseif strcmp(param_name, 'FEATURES')
         % Update description data for feature set
-        [feat_desc_params, TB_params] = update_feat_desc_params(TB_params, feat_list); %#ok<*SETNU>
+        [feat_desc_params, TB_params] = update_all_feat_desc_params(TB_params, feat_list); %#ok<*SETNU>
     elseif strcmp(param_name, 'CLASSIFIER')
         % Update list of available classifier data files in GUI
         populate_datalist(hpopcdata);
         % Update description data for classifier
-        [cls_desc_params, TB_params] = update_cls_desc_params(TB_params, class_list);
+        [cls_desc_params, TB_params] = update_all_cls_desc_params(TB_params, class_list);
         % Update GUI vars for feedback mode
-        if isfield(cls_desc_params, 'uses_feedback')
-            if cls_desc_params.uses_feedback == 1
+        temp = TB_params.CLASSIFIER;
+        if isfield(cls_desc_params{temp}, 'uses_feedback')
+            if cls_desc_params{temp}.uses_feedback == 1
                 set(hboxfeedon, 'Value', 1);    % Checkbox on
                 tag_hide_show('TB_FEEDBACK_ON_sub','on');
-            elseif cls_desc_params.uses_feedback == 0
+            elseif cls_desc_params{temp}.uses_feedback == 0
                 set(hboxfeedon, 'Value', 0);    % Checkbox off
                 tag_hide_show('TB_FEEDBACK_ON_sub','off');
             end
@@ -814,7 +912,7 @@ function config_chkbox_clbk(hobj, junk)
     box_stat = get(hobj, 'Value');
     if box_stat == get(hobj, 'Min')     % box is unchecked
         set(hobj, 'Value', 0);
-        TB_params.(param_name) = 0;
+  TB_params.(param_name) = 0;
         % Disable options that do not make sense now that this box has been
         % unchecked
         if strcmp(param_name, 'TB_FEEDBACK_ON') % no feeback
@@ -845,7 +943,7 @@ function config_chkbox_clbk(hobj, junk)
                 tag_hide_show('det', 'on');
             end
         end
-        check_ins(src_dir, out_dir, TB_params, hgobutton)
+        check_ins(TB_params, hgobutton)
     elseif strcmp(param_name, 'MAN_ATR_SEL') == 1
         if TB_params.MAN_ATR_SEL == 1
             % enable manual det./class. selection
@@ -856,7 +954,7 @@ function config_chkbox_clbk(hobj, junk)
             % also disable using preprocessed results
             TB_params.SKIP_DETECTOR = 0;
             set(hboxskipdet, 'Value', TB_params.SKIP_DETECTOR);
-            tag_hide_show('preproc', 'on');
+        tag_hide_show('preproc', 'on');
         end
     elseif strcmp(param_name, 'CONTCORR_ON') == 1
         if TB_params.CONTCORR_ON == 1
@@ -890,30 +988,30 @@ end
 function inputdir_clbk(junk, junk2)
     % On press of source directory button, get source directory from the user,
     % generate file of list of input files, and update label string.
-    if isempty(src_dir)
+    if isempty(TB_params.SRC_DIR)
         init_dir = TB_params.TB_ROOT;
     else
-        init_dir = src_dir;
+        init_dir = TB_params.SRC_DIR;
     end
     sel_dir = uigetdir(init_dir,'Select directory for image files');
     % If directory string is too long, abbreviate it for the GUI
-    if length(sel_dir) > 30
-        temp = [sel_dir(1:12),'...',sel_dir((end-12):end)];
+    if length(sel_dir) > 30   
+    temp = [sel_dir(1:12),'...',sel_dir((end-12):end)];
     else
         temp = sel_dir;
     end
     % Update source directory display label
     if ~isnumeric(temp)
         set(hsrcstr,'String', temp);
-        src_dir = sel_dir;
+        TB_params.SRC_DIR = sel_dir;
     end
     % Check to enable go button
-    check_ins(src_dir, out_dir, TB_params, hgobutton)
+    check_ins(TB_params, hgobutton)
     % Populate file selection menu
-    populate_filelist(hfilesel, src_dir, TB_params.DATA_FORMAT);
+    populate_filelist(hfilesel, TB_params.SRC_DIR, TB_params.DATA_FORMAT);
     % Optional output
     if TB_params.TB_HEAVY_TEXT == 1
-        fprintf(1,'%-25s %-s\n', 'Source images directory: ', src_dir);
+        fprintf(1,'%-25s %-s\n', 'Source images directory: ', TB_params.SRC_DIR);
     end
 end
 
@@ -931,13 +1029,15 @@ function outputdir_clbk(junk, junk2)
     % Update source directory display label
     if ~isnumeric(temp)
         set(houtstr,'String', temp);
-        out_dir = sel_dir;
+        TB_params.OUT_DIR = sel_dir;
+        TB_params.ECD_DIR = [sel_dir,filesep,'ecd'];
+        TB_params.TEMP_DIR = [sel_dir,filesep,'temp'];
     end
     % Check to enable go button
-    check_ins(src_dir, out_dir, TB_params, hgobutton)
+    check_ins(TB_params, hgobutton)
     % Optional output
     if TB_params.TB_HEAVY_TEXT == 1
-        fprintf(1,'%-25s %-s\n', 'Output directory:', out_dir);
+        fprintf(1,'%-25s %-s\n', 'Output directory:', TB_params.OUT_DIR);
     end
 end
 
@@ -945,14 +1045,12 @@ end
 function gtfile_clbk(junk, junk2)
     % On press of gt file button, get groundtruth file from the user and
     % update the label string
-    if length(src_dir) > 1
-        [sel_gt_file,PathName,FilterIndex] = uigetfile([src_dir,filesep,'*.txt'], ...
+    if length(TB_params.SRC_DIR) > 1
+        [sel_gt_file,PathName,FilterIndex] = uigetfile([TB_params.SRC_DIR,filesep,'*.txt'], ...
             'Select groundtruth file'); %#ok<*NASGU>
     else
         [sel_gt_file,PathName,FilterIndex] = uigetfile([TB_params.TB_ROOT,filesep,'*.txt'], ...
                 'Select groundtruth file');
-%         sel_gt_file = uigetfile([TB_params.TB_ROOT,filesep,'*.txt'], ...
-%                 'Select groundtruth file');
     end
     % If filename is too long, abbreviate it for the GUI
     if length(sel_gt_file) > 30
@@ -965,7 +1063,7 @@ function gtfile_clbk(junk, junk2)
         set(hgtstr,'String', temp);
         gt_file = [PathName,sel_gt_file];
         % Check to enable go button
-        check_ins(src_dir, out_dir, TB_params, hgobutton)
+        check_ins(TB_params, hgobutton)
         % Optional output
         if TB_params.TB_HEAVY_TEXT == 1
             fprintf(1,'%-25s %-s\n', 'Groundtruth file:', gt_file);
@@ -992,7 +1090,9 @@ function go_clbk(junk, junk2)
         use_index = use_index - 1;
     end
     if ~isdeployed
-        % addpath(genpath( TB_params.TB_ROOT ));
+        % add paths of core folders (paths for detectors, classifiers, etc.
+        % will be added later as they are needed to avoid potential file
+        % conflicts.
         tic
         addpath(TB_params.TB_ROOT);
         addpath(genpath([TB_params.TB_ROOT,filesep,'ATR Core']));
@@ -1002,7 +1102,8 @@ function go_clbk(junk, junk2)
         addpath(genpath([TB_params.TB_ROOT,filesep,'AC Prep']));
         toc
     end
-    bravo_input_sim(src_dir, use_index, gt_file, out_dir, sensor, TB_params,sbar);
+    % Start processing loop
+    bravo_input_sim(TB_params.SRC_DIR, use_index, gt_file, TB_params.OUT_DIR, sensor, TB_params,sbar);
 end
 
 % Launch classifier training function
@@ -1044,6 +1145,11 @@ function confusion_clbk(junk,junk2)
 confusion_series
 end
 
+% Convert a lat/long-based ground truth file into pixel-based one
+function gt_conv_clbk(junk, junk2)
+convert_latlong_gt_to_xy
+end
+
 % Launch documentation
 function help_clbk(junk,junk2)
 web(['file://',TB_params.TB_ROOT,filesep,'Docs',filesep,'MATS_Manual',...
@@ -1053,22 +1159,21 @@ end
 % Launch 'about' window
 function about_clbk(junk,junk2)
 gui_pos = get(f, 'Position');
-abt_dim = [320,180];
+abt_dim = [320,220];
 xx = gui_pos(1) + (gui_pos(3) - abt_dim(1))/2;
 yy = gui_pos(2) + (gui_pos(4) - abt_dim(2))/2;
 abt_pos = [xx, yy, abt_dim];
 af = figure('Position', abt_pos, 'Name','About MATS GUI',...
     'NumberTitle','off', 'MenuBar','none');
-dist_stmt = ['DISTRIBUTION STATEMENT D. Distribution authorized to the ',...
-    'Department of Defense and U.S. DoD contractors only. ',...
-    'Other requests shall be referred to Naval Surface Warfare Center - ',...
-    'Panama City (NSWC-PC), 110 Vernon Ave., Panama City, FL 32407-7001.'];
-title = 'Modular ATR Testbed Suite (MATS) GUI';
+dist_stmt = ['DISTRIBUTION STATEMENT A. Approved for public release; distribution is unlimited. ',...
+    'NOTE: Modules used in conjunction with MATS may be restricted. (See user manual for more details.)'];
+title = 'Modular Algorithm Testbed Suite (MATS) GUI';
 vsn_info = ['(v',gui_vsn,', ',gui_bdate,')'];
-% title = ['MATS GUI (v',TB_params.VERSION,', ',bdate,')'];
-byline = 'NSWC - Panama City';
+byline = ['Naval Surface Warfare Center - ',...
+    'Panama City (NSWC-PC), 110 Vernon Ave., Panama City, FL 32407-7001.'];
+% byline = 'NSWC - Panama City';
 uicontrol('Style', 'text', 'Position', [[10,10],abt_dim-20],...
-    'String', {title,vsn_info,byline,'',dist_stmt});
+    'String', {title,vsn_info,'',byline,'',dist_stmt});
 end
 
 % Launch DB script to sort contacts by classifier confidence (x/y coords)
@@ -1149,10 +1254,8 @@ set(hfilesel,'String', ['Use index range...';infilelist], 'Value', 1,...
 % clear infilelist;
 end
 
-% Populate classifier data file dropdown will file items
+% Populate classifier data file dropdown with file items
 function populate_datalist(hpopcdata)
-% temp = func2str(TB_params.CLS_HANDLES{TB_params.CLASSIFIER});
-% cdata_list = import_cls_data([tbr,filesep,'Classifiers',filesep,temp(5:end)]);
 [cdata_list, def_index] = import_classdata(...
     TB_params.CLS_HANDLES{TB_params.CLASSIFIER}, TB_params.TB_ROOT);
 if isempty(def_index)
@@ -1167,8 +1270,9 @@ end
 
 % Check if the inputs required for running the testbed have been entered
 % by the user, and if so, enable the go button 
-function check_ins(src_dir, out_dir, TB_params, hgo)
-ok = (~isempty(src_dir) || TB_params.SKIP_DETECTOR == 1) && ~isempty(out_dir);
+function check_ins(TB_params, hgo)
+ok = (~isempty(TB_params.SRC_DIR) || TB_params.SKIP_DETECTOR == 1) &&...
+    ~isempty(TB_params.OUT_DIR);
 if ok
     set(hgo , 'Enable', 'on');
     set(sbar.hlabel, 'String', 'Press the start button to begin.');

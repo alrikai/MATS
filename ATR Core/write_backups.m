@@ -37,9 +37,6 @@ if fid ~= -1
     fclose(fid);
 else
     fprintf(1,'Unlock file %s could not be opened.\n', filename_unlock);
-%     fid = fopen(filename_lock,'w');
-%     fwrite(fid, lock_ind_new, 'uint16');
-%     fclose(fid);
 end
 % keyboard
 % Append all newly locked contacts to the permanent backup file.

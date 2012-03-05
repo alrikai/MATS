@@ -1,4 +1,4 @@
-function append_feedback(cont, index, fb_path, show_details)
+function append_feedback(cont, sensor, index, fb_path, show_details)
 % append feedback data for a contact evaluation to the feedback file
 % cont    = the contact with complete data
 % index   = index of contact
@@ -28,10 +28,13 @@ fwrite(fid, len, 'uint8');
 fwrite(fid, cont.fn, 'uchar');
 % side
 fwrite(fid, cont.side, 'uchar');
-% sensor
-len = length(cont.sensor);
+% % sensor
+% len = length(cont.sensor);
+% fwrite(fid, len, 'uint8');
+% fwrite(fid, cont.sensor, 'uchar');
+len = length(sensor);
 fwrite(fid, len, 'uint8');
-fwrite(fid, cont.sensor, 'uchar');
+fwrite(fid, sensor, 'uchar');
 % position
 fwrite(fid, cont.x, 'uint16');
 fwrite(fid, cont.y, 'uint16');
@@ -39,6 +42,7 @@ fwrite(fid, cont.y, 'uint16');
 % fwrite(fid, cont.detscore, 'float32');
 % operator feedback
 fwrite(fid, cont.opfeedback.opdisplay, 'int8');
-fwrite(fid, cont.opfeedback.opconf, 'int8');       
+fwrite(fid, cont.opfeedback.opconf, 'int8');
+fwrite(fid, cont.opfeedback.type, 'int8');
 fclose(fid);
 end

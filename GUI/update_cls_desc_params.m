@@ -22,4 +22,9 @@ assert(isfield(cls_desc_params, 'module_tag'),...
 assert(isfield(cls_desc_params, 'uses_feedback'),...
     'about.txt must contain ''uses_feedback: (0 or 1)''');
 TB_params.TB_FEEDBACK_ON = cls_desc_params.uses_feedback;
+
+% Multiclass
+assert(isfield(cls_desc_params, 'multiclass'),...
+    'about.txt must contain ''multiclass: (0 or 1)''');
+TB_params.MULTICLASS = cls_desc_params.multiclass;
 end
