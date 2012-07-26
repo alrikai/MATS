@@ -33,4 +33,9 @@ end
 % Module tag
 assert(isfield(det_desc_params{sel_index}, 'module_tag'),...
     'about.txt must contain ''module_tag'' string');
+
+% Incremental learning flag
+assert(isfield(det_desc_params{sel_index}, 'has_learning'),...
+    'about.txt must contain ''has_learning: (0 or 1)''');
+TB_params.INCR_DETECTOR = det_desc_params{sel_index}.has_learning;
 end

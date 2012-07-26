@@ -357,6 +357,10 @@ while k <= k_end   % for each source image...
             % Get feedback
             allprev = feedback_switch(p_in_struct, allprev, TB_params);
         end
+        % Train detector with input data and labeled contacts
+        if TB_params.INCR_DETECTOR == 1
+            teach_detector(p_in_struct, contacts, TB_params);
+        end
         
         % Save data to make ROC curve up to this point
         save_roc_data(p_sfn, od, p_in_struct.side, allprev, img_start);
@@ -385,6 +389,10 @@ while k <= k_end   % for each source image...
         if TB_params.TB_FEEDBACK_ON == 1
             % Get feedback
             allprev = feedback_switch(s_in_struct, allprev, TB_params);
+        end
+        % Train detector with input data and labeled contacts
+        if TB_params.INCR_DETECTOR == 1
+            teach_detector(p_in_struct, contacts, TB_params);
         end
         
         % Save data to make ROC curve up to this point
@@ -750,4 +758,38 @@ else
 end
 
 delete_flag([TB_params.TB_ROOT,filesep,'iofile_atr_busy.flag'], 0);
+end
+
+% Run the detector again with input struct and labeled contacts (Added by Bailey)
+function teach_detector(input_struct, contacts, TB_params)
+    % get detector function handle
+    hdet = TB_params.DET_HANDLES{TB_params.DETECTOR};
+    if ~isdeployed
+        % add necessary folders to path
+        det_paths = get_detpaths(TB_params);
+        addpath(det_paths);
+    end
+    % Find contacts associated with this input data
+    contacts = contacts(find(strcmp(input_struct.fn, {contacts.fn}) == 1));
+    % run detector
+    fprintf(1,'Launching detector for in-situ learning (%s)...\n',func2str(hdet));
+    hdet(input_struct, contacts);
+    if ~isdeployed
+        % remove folders from path (to prevent overload conflicts)
+        rmpath(det_paths);
+    end
+
+    % copied from atr_testbed_altfb.m
+    function det_paths = get_detpaths(TB_params)
+    % Get all folder paths for a given detector.
+    hdet = TB_params.DET_HANDLES{TB_params.DETECTOR};
+    temp = func2str(hdet);
+    if strcmpi( temp((end-1):end),'HF' ) == 1 ...
+            || strcmpi( temp((end-1):end),'BB' )
+        det_folder = temp(5:(end-3));
+    else
+        det_folder = temp(5:end);
+    end
+    det_paths = genpath([TB_params.TB_ROOT,filesep,'Detectors',filesep,det_folder]);
+    end
 end

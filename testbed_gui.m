@@ -140,6 +140,7 @@ TB_params = struct('TB_HEAVY_TEXT', 0,...
     'PERF_HANDLES', {hperf},...
     'TB_ROOT', tbr,...
     'SKIP_DETECTOR', 0,...
+    'INCR_DETECTOR', 0,...
     'PRE_DET_RESULTS','',...
     'SKIP_PERF_EST', 1,...
     'SKIP_FEEDBACK', 2,...
@@ -738,6 +739,9 @@ function loadconfig_clbk(junk, junk2)
         end
         set(himgsave, 'Value', TB_params.SAVE_IMAGE);
         
+        if ~isfield(TB_params,'INCR_DETECTOR')
+            TB_params.INCR_DETECTOR = 0;
+        end
         if ~isfield(TB_params,'BURIED_ONLY')
             TB_params.BURIED_ONLY = 0;
         end
@@ -881,6 +885,9 @@ function config_popup_clbk(hobj, junk, offset)
         % Update list of available files in GUI
         populate_filelist(hfilesel, TB_params.SRC_DIR, TB_params.DATA_FORMAT);
         range_init(hfilesel);
+    elseif strcmp(param_name, 'DETECTOR')
+        % Update description data for detector
+        [det_desc_params, TB_params] = update_all_det_desc_params(TB_params, det_list);
     elseif strcmp(param_name, 'FEATURES')
         % Update description data for feature set
         [feat_desc_params, TB_params] = update_all_feat_desc_params(TB_params, feat_list); %#ok<*SETNU>

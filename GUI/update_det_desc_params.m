@@ -17,4 +17,9 @@ det_desc_params = read_desc_file(df_path);
 % Module tag
 assert(isfield(det_desc_params, 'module_tag'),...
     'about.txt must contain ''module_tag'' string');
+
+% Incremental learning flag
+assert(isfield(det_desc_params, 'has_learning'),...
+    'about.txt must contain ''has_learning: (0 or 1)''');
+TB_params.INCR_DETECTOR = det_desc_params.has_learning;
 end

@@ -1,3 +1,4 @@
 module_name: Test Detector
 module_tag: TEST
 for_buried: 1
+has_learning: 0
