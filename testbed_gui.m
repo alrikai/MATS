@@ -52,7 +52,7 @@ button_y = 18;              % height of buttons
 
 % Item subpanel dimensions
 param_subp_h = 22;          % height of item in param subpanel
-param_numitems = 7;         % # of items in param subpanel
+param_numitems = 8;         % # of items in param subpanel
 atr_subp_h = 22;            % height of item in atr subpanel
 atr_numitems = 9;           % # of items in atr subpanel
 io_subp_h = 22;             % height of item in I/O subpanel
@@ -144,6 +144,7 @@ TB_params = struct('TB_HEAVY_TEXT', 0,...
     'PRE_DET_RESULTS','',...
     'SKIP_PERF_EST', 1,...
     'SKIP_FEEDBACK', 2,...
+    'FEEDBACK_LIMIT', Inf,...
     'ARCH_FEEDBACK', 0,...
     'TB_FEEDBACK_ON', 1,...
     'OPCONF_MODE', 0,...
@@ -317,9 +318,13 @@ mod_pos = [0, subp_size(2)+inbuff, 0, 0];
     {'Every contact is confirmed/rejected by operator',...
       'Interpret no operator comment as implicit agreement',...
       'Use only explicit operator calls (don''t assume agreement)'}, 1, 1, indent_w, 'param TB_FEEDBACK_ON_sub');
+% - Feedback Request Limit
+[junk,htxtopreqlimit] = config_txtinput_panel(hparampanel, 'FEEDBACK_LIMIT',...
+    base_pos - 6*mod_pos, 150, 'Feedback request limit:',...
+    Inf, indent_w, 'param TB_FEEDBACK_ON_sub');
 % Operator archive checkbox
 [junk,hboxarchfeed] = config_chkbox_panel(hparampanel, 'ARCH_FEEDBACK', ...
-    base_pos - 6*mod_pos, 'Archive operator feedback', 0, 'param');
+    base_pos - 7*mod_pos, 'Archive operator feedback', 0, 'param');
 
 if TB_params.SKIP_DETECTOR == 1     % preproc mode
     tag_hide_show('preproc', 'off');% hide irrelevant I/O fields
@@ -546,6 +551,19 @@ hf2 = uicontrol('Style', 'edit', 'Position', [4*2+indent+w1+w2+w3+20, 2, w4, 20]
     'Callback', {@end_index_clbk}, 'Parent', subpanel, 'Tag', tag);
 end
 
+% Makes a subpanel with text input field and a static text field
+function [subpanel, txt] = config_txtinput_panel(parent, fieldname,...
+        position, text_w, text_string, initval, indent, tag)
+subpanel = uipanel('Units', 'pixels', 'Parent', hparampanel,...
+    'Position', position, 'BorderType', 'none');
+uicontrol('Style', 'text', 'String', text_string, 'Parent', subpanel,...
+    'HorizontalAlignment', 'left',...
+    'Position', [indent+2, 4, text_w, 16], 'Tag', tag);
+txt = uicontrol('Style', 'edit', 'Position', [2*2+indent+text_w, 2, 50, 20],...
+    'Callback', {@config_txtinput_clbk}, 'Tag', tag,...
+    'UserData', fieldname, 'Parent', subpanel, 'String', initval);
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%% CALLBACK FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Callback for scroll bar
 function scroll_clbk(src,junk) %#ok<*INUSD>
@@ -656,6 +674,7 @@ function loadconfig_clbk(junk, junk2)
         set(hboxskipdet, 'Value', TB_params.SKIP_DETECTOR);
         set(hboxskipperf, 'Value', TB_params.SKIP_PERF_EST);
         set(hpopskipfeed, 'Value', TB_params.SKIP_FEEDBACK+1);
+        set(htxtopreqlimit, 'String', TB_params.FEEDBACK_LIMIT);
         set(hboxarchfeed, 'Value', TB_params.ARCH_FEEDBACK);
         set(hboxfeedon, 'Value', TB_params.TB_FEEDBACK_ON);
         % Update ATR components for GUI lists - determine the desired
@@ -870,6 +889,15 @@ function plotopts_clbk(hobj,junk,index) %#ok<*INUSL>
     val = get(hobj, 'Value');
     param_name = get(hobj, 'UserData');
     TB_params.(param_name)(index) = val;
+end
+
+% Callback for text input fields
+function config_txtinput_clbk(hobj, junk)
+    num = str2double(get(hobj, 'String'));
+    if ~isnan(num) % is a number
+        param_name = get(hobj, 'UserData');
+        TB_params.(param_name) = num;
+    end
 end
 
 % Callback for drop-down menu
