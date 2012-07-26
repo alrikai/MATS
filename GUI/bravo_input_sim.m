@@ -423,7 +423,7 @@ if TB_params.TB_FEEDBACK_ON == 1 && TB_params.SKIP_FEEDBACK ~= 2
         for qq = 1:length(skip_ind)
             skipped(qq).opfeedback.opdisplay = 1;
         end
-        skipped = opfeedback_stub(skipped, TB_params, skip_ind);
+        skipped = opfeedback_stub(skipped, sensor, TB_params, skip_ind);
         % Transfer ratings from skipped list back to contacts list
         for qq = 1:length(skip_ind)
             contacts(skip_ind(qq)).opfeedback.opdisplay = skipped(qq).opfeedback.opdisplay;
@@ -544,7 +544,7 @@ toc
                 fprintf(1, '%-s\n', 'Operator feedback (from new GUI)...');
                 allprev = opfeedback_display_gui(input, allprev, TB_params);
 %                 fprintf(1, '%-s\n', 'Operator feedback (from stub GUI)...');
-%                 allprev = opfeedback_stub(allprev, TB_params);
+%                 allprev = opfeedback_stub(allprev, sensor, TB_params);
             case 3
                 % use gt values for operator calls
                 fprintf(1, '%-s\n', 'Operator feedback (from GT data)...');

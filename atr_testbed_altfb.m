@@ -93,6 +93,7 @@ if isempty(input_struct) == 0   % if there is an image to process...
     timings = timing_sub(timings);
 else                    % input_struct is empty...
     new_contacts = struct([]);
+    new_ecdata = struct([]);
     perf_out = struct([]);
 end
 

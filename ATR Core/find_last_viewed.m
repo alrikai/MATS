@@ -13,7 +13,7 @@ else
 end
 tempdone = 0;
 lastview_index = 0;
-while tempmarker > 1 && tempdone == 0
+while tempmarker > 0 && tempdone == 0
     if contacts(tempmarker).opfeedback.opdisplay < 0
         lastview_index = tempmarker;
         tempdone = 1;

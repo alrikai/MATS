@@ -746,12 +746,12 @@ function loadconfig_clbk(junk, junk2)
         end
          if ~isfield(TB_params,'ECD_DIR')
             TB_params.ECD_DIR = [TB_params.OUT_DIR,filesep,'ecd'];
-        elseif isempty(TB_params,'ECD_DIR')
+        elseif isempty(TB_params.ECD_DIR)
             TB_params.ECD_DIR = [TB_params.OUT_DIR,filesep,'ecd'];
         end
         if ~isfield(TB_params,'TEMP_DIR')
             TB_params.TEMP_DIR = [TB_params.OUT_DIR,filesep,'temp'];
-        elseif isempty(TB_params,'ECD_DIR')
+        elseif isempty(TB_params.ECD_DIR)
             TB_params.TEMP_DIR = [TB_params.OUT_DIR,filesep,'temp'];
         end
         if ~isfield(TB_params,'GT_FORMAT')

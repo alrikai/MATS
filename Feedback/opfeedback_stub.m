@@ -1,4 +1,4 @@
-function contacts = opfeedback_stub(contacts, TB_params, varargin)
+function contacts = opfeedback_stub(contacts, sensor, TB_params, varargin)
 % stand-in for operator feedback.  Shows images and allows for user input.
 % Adds user input to a hard-coded feedback file.  Optionally, this function
 % can also write user input to an archive file to be used for later
@@ -237,7 +237,7 @@ end
                 contacts(img_cnt).opfeedback.opdisplay = contacts(img_cnt).opfeedback.opdisplay - dispmod;
                 
                 % append this contact to the feedback file
-                append_feedback(contacts(img_cnt), img_cnt,...
+                append_feedback(contacts(img_cnt), sensor, img_cnt,...
                     TB_params.FEEDBACK_PATH, TB_params.TB_HEAVY_TEXT);
                 % increment counter in file
                 opfeedback_file_cnt = incr_opfile_cnt();
