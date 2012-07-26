@@ -637,8 +637,13 @@ function loadconfig_clbk(junk, junk2)
         new_config = load([config_path, filesep, config_fn]);
         % src_dir, gt_file, out_dir, sensor, and TB_params loaded (v1)
         % gt_file, sensor, TB_params, config_vsn loaded (v2)
-        
-        TB_params = new_config.TB_params;
+
+        % Rather than replace TB_params with the new_config, merge the two.
+        %TB_params = new_config.TB_params;
+        names = fieldnames(new_config.TB_params);
+        for f = 1:length(names)
+            TB_params.(names{f}) = new_config.TB_params.(names{f});
+        end
         % Update source directory display label, shortening if necessary
         if ~isfield(new_config,'config_vsn') % v1
             TB_params.SRC_DIR = new_config.src_dir;
