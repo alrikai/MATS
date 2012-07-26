@@ -54,18 +54,13 @@ img_cnt = 1;
 % number of contacts to be processed by the operator before reclassification
 % occurs.
 reclass_at = 5;
+% Track the number of contacts processed per pass
+query_cnt = 0;
+% Track the number of contacts processed total
+total_queries = 0;
 
-% skip over contacts at the beginning that have been already marked as
-% viewed
-while img_cnt <= length(contacts) && contacts(img_cnt).opfeedback.opdisplay < 0
-    img_cnt = img_cnt + 1;
-end
-% skip over contacts that won't be shown
-while img_cnt <= length(contacts) && contacts(img_cnt).opfeedback.opdisplay <= 0
-    contacts(img_cnt).opfeedback.opdisplay = contacts(img_cnt).opfeedback.opdisplay - dispmod; % mark processed
-    contacts(img_cnt).opfeedback.opconf = 0;
-    img_cnt = img_cnt + 1;
-end
+% find the first contact to show
+img_cnt = find_next_contact(img_cnt);
 % img_cnt now points to first contact designated to be shown to the user
 
 % in the event that there are no contacts to view, prepare to exit quickly
@@ -185,7 +180,6 @@ end
             % value must show that it has passed this index
             if index <= img_cnt
                 img_cnt = img_cnt + 1;
-                dispmod = 10;
                 contacts(index).opfeedback.opdisplay = ...
                     contacts(index).opfeedback.opdisplay - dispmod;
                 % advance label number on GUI
@@ -235,6 +229,8 @@ end
 
                 % mark contact as processed
                 contacts(img_cnt).opfeedback.opdisplay = contacts(img_cnt).opfeedback.opdisplay - dispmod;
+                query_cnt = query_cnt + 1;
+                total_queries = total_queries + 1;
                 
                 % append this contact to the feedback file
                 append_feedback(contacts(img_cnt), sensor, img_cnt,...
@@ -246,51 +242,34 @@ end
                 delete_flag([TB_params.TB_ROOT,filesep,'opfb_op_busy.flag'],...
                     TB_params.FLAG_MSGS_ON);
                 
-                % periodically retrain classifier
-                if opfeedback_file_cnt >= reclass_at
+    %             fprintf(1, '%-s\n', [' (Contact #',num2str(img_cnt),' of ',num2str(length(contacts))]);
+
+            end
+            % advance to next contact
+            img_cnt = img_cnt + 1;
+            % find the next contact to show.
+            img_cnt = find_next_contact(img_cnt);
+            
+            % prepare for next iteration
+            if total_queries >= TB_params.FEEDBACK_LIMIT
+                clear_dialog();
+            elseif img_cnt > length(contacts)
+                if query_cnt == 0
+                    clear_dialog();
+                else
+                    img_cnt = 1;
+                    query_cnt = 0;
+                    % retrain classifier after each pass
                     fprintf(1,'\nLaunching classifier update...\n\n');
                     [junk, contacts] = atr_testbed_altfb([], contacts, TB_params);
                     % clear feedback file (all updates stored therein have
                     % been incorporated into the contact list
                     reset_opfile_cnt(TB_params.TB_ROOT);
                     figure(f);
+
+                    % find the next contact to show.
+                    img_cnt = find_next_contact(img_cnt);
                 end
-
-    %             fprintf(1, '%-s\n', [' (Contact #',num2str(img_cnt),' of ',num2str(length(contacts))]);
-
-            end
-            % advance to next contact
-            img_cnt = img_cnt + 1;
-            % skip over contacts that shouldn't be shown or were manually
-            % added (we've already 'seen' these...)
-            while img_cnt <= length(contacts) && ...
-                    (contacts(img_cnt).opfeedback.opdisplay == 0 || ...
-                    strcmpi(contacts(img_cnt).detector,'manual') == 1)
-                contacts(img_cnt).opfeedback.opdisplay = contacts(img_cnt).opfeedback.opdisplay - dispmod; % mark processed
-                contacts(img_cnt).opfeedback.opconf = 0; %%%%%
-                img_cnt = img_cnt + 1;
-            end
-            
-            % prepare for next iteration
-            if img_cnt > length(contacts)
-                % all contacts in this block have been processed
-%                 disp('** Wrapping up process...');
-                % clear image snippet
-                cla(haxes);
-                % set contact label to final message
-                set(hlabel, 'String', 'Press any key.');
-                % clear radio button selection
-                set(hratinggroup, 'SelectedObject', []); 
-                % disable radio buttons
-                set(hrs, 'Enable', 'off');
-                set(hr1, 'Enable', 'off');
-                set(hr2, 'Enable', 'off');
-                set(hr3, 'Enable', 'off');
-                set(hr4, 'Enable', 'off');
-                set(hr5, 'Enable', 'off');
-                set(hnextbutton, 'Enable', 'off');
-                done = 1;
-                close(f);
             else
                 % counter is on new contact to be processed
 %                 disp(['** Preparing for #',num2str(img_cnt)]);                
@@ -382,4 +361,33 @@ end
             ind = 1;
         end
     end
+
+    function img_cnt = find_next_contact(img_cnt)
+        while img_cnt <= length(contacts) && ...
+            (contacts(img_cnt).opfeedback.opdisplay <= 0 || strcmpi(contacts(img_cnt).detector,'manual') == 1)
+          img_cnt = img_cnt + 1;
+        end
+    end
+
+    function clear_dialog()
+        % all contacts in this block have been processed
+    %                 disp('** Wrapping up process...');
+        % clear image snippet
+        cla(haxes);
+        % set contact label to final message
+        set(hlabel, 'String', 'Press any key.');
+        % clear radio button selection
+        set(hratinggroup, 'SelectedObject', []);
+        % disable radio buttons
+        set(hrs, 'Enable', 'off');
+        set(hr1, 'Enable', 'off');
+        set(hr2, 'Enable', 'off');
+        set(hr3, 'Enable', 'off');
+        set(hr4, 'Enable', 'off');
+        set(hr5, 'Enable', 'off');
+        set(hnextbutton, 'Enable', 'off');
+        done = 1;
+        close(f);
+    end
+
 end

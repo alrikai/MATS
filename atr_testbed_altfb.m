@@ -474,11 +474,6 @@ dispmod = 10; % This exists somewhere else too; maybe move to TB_params?
                 % skipped case
                 prev_contacts(k_back).opfeedback.opdisplay = k_opdisp - 15;
                 k_back = k_back - 1;
-            elseif k_opdisp == 0
-                prev_contacts(k_back).opfeedback.opdisplay = ...
-                    k_opdisp - dispmod;
-                prev_contacts(k_back).opfeedback.opconf = 0; 
-                k_back = k_back - 1;
             else
                 temp_done_back = 1;
             end

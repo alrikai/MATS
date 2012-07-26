@@ -24,14 +24,6 @@ if TB_params.SKIP_DETECTOR == 1
         return
     end
 end
-if TB_params.SKIP_FEEDBACK == 1
-    % load data from stored opfile
-    fprintf(1, '%-s\n','Loading data from operator archive...');
-    new_img_ind = 1;
-    oper_ind = 1;
-    [confs, inds] = get_opconfs(TB_params.OPARCHIVE_PATH);
-    pause;
-end
 
 % if ~isdeployed
 %     % addpath(genpath( TB_params.TB_ROOT ));
@@ -546,7 +538,7 @@ toc
             case 1
                 % read in results from operator archive instead
                 fprintf(1, '%-s\n', 'Operator feedback (from archive)...');
-                allprev = import_opfile(allprev);
+                allprev = opfeedback_archive(allprev, sensor, TB_params);
             case 0
                 % use feedback stub gui
                 fprintf(1, '%-s\n', 'Operator feedback (from new GUI)...');
@@ -556,148 +548,8 @@ toc
             case 3
                 % use gt values for operator calls
                 fprintf(1, '%-s\n', 'Operator feedback (from GT data)...');
-                for z = new_img_ind:length(allprev)
-                    %                     allprev(z).opfeedback.opconf = allprev(z).gt;
-                    if allprev(z).gt == 1
-                        temp = 5;
-                    elseif allprev(z).gt == 0
-                        temp = 1;
-                    else
-                        temp = 3;
-                    end
-                    allprev(z).opfeedback.opdisplay = allprev(z).opfeedback.opdisplay - 10;
-                    allprev(z).opfeedback.opconf = temp;
-                    append_feedback(allprev(z), z,...
-                        TB_params.FEEDBACK_PATH, TB_params.TB_HEAVY_TEXT);
-                    fprintf(1, '#%d: GT %d used for .opconf\n',...
-                        z, temp);
-                end
+                allprev = opfeedback_gt(allprev, sensor, TB_params);
         end
-    end
-
-% Incorporates the proper data from the confs array to the contact list
-    function contacts = import_opfile(contacts)
-        % Imports the proper data from the confs array (returned from function
-        % get_opconfs) to the contact list
-        %
-        % contacts = a list of contacts in the form of an array of contact
-        %   structures
-        disp('Reading from opfile archive...');
-        cind = new_img_ind;         % index in contact list
-        opind = oper_ind;           % index in operator archive list
-        while cind <= length(contacts)  % for each spot in this segment...
-            if opind <= length(confs)       % if still more opconf data...
-                if inds(opind) < cind           % if archive data from past image...
-                    % ignore, try next archive entry
-                    disp('ignore, try next archive entry');
-                    opind = opind + 1;
-                elseif inds(opind) > length(contacts)   % else if archive data from future image...
-                    fprintf(1, 'Bailing out (next opconf @%d > contact length of %d)\n',...
-                        inds(opind), length(contacts));
-                    % ignore, might as well quit
-                    % however, there may or may not be leftover contacts,
-                    % so fill those in first
-                    for w = cind:length(contacts)
-                        contacts(w).opfeedback.opconf = 0;
-                        disp('0 fill');
-                    end
-                    return
-                else
-                    % this data is in this set
-                    if cind == inds(opind)
-                        % match! store
-                        disp('match! store');
-                        contacts(cind).opfeedback.opconf = confs(opind);
-                        % advance both indicies
-                        cind = cind + 1;
-                        opind = opind + 1;
-                        % advance marker so that next image starts in right
-                        % place
-                        oper_ind = oper_ind + 1;
-                    else
-                        % archive data is in same image but does not match
-                        contacts(cind).opfeedback.opconf = 0;
-                        disp('archive data is in same image but does not match');
-                        % advance contacts index
-                        cind = cind + 1;
-                    end
-                end
-            else
-                % opconf data is exhausted
-                disp('opconf data is exhausted');
-                contacts(cind).opfeedback.opconf = 0;
-                % advance contacts index
-                cind = cind + 1;
-            end
-        end     % end while
-    end
-
-% Read operator data from saved operator archive file
-    function [confs, inds] = get_opconfs(filename)
-        % Read operator data from the saved operator file
-        %
-        % filename = file path of the operator file
-        % confs = array of operator confidence ratings (.opconf) from file
-        % inds  = indexes corresponding to the values in 'confs'
-        memstep = 20;
-        confs = zeros(1, memstep); inds = zeros(1, memstep);
-        fid = fopen(filename,'r');
-        try
-            fid = fopen(filename, 'r'); % read from file
-        catch ME
-            type = regexp(ME.identifier, '(?<=:)\w+$', 'match');
-            if strcmp(type, 'InvalidFid') == 1
-                disp([' ',filename,' cannot be opened.']);
-            else
-                disp([' An error has occured using ',filename]);
-                keyboard
-            end
-        end
-        cnt = 1;
-        while feof(fid) == 0
-            %%% read data
-            % index
-            chunk = fread(fid, 1, 'uint8');
-            if isempty(chunk) %|| chunk > length(contacts)
-                disp('end import_opfile');
-                endpos = max( find(inds == 0,1,'first')-1, 1);
-                
-                inds = inds(1:endpos);
-                confs = confs(1:endpos);
-                return
-            end
-            if cnt > length(inds)
-                % grow array
-                disp('++++');
-                temp = zeros(1, length(inds)+memstep);
-                temp(1:(end-memstep)) = inds;
-                inds = temp;
-                temp = zeros(1, length(confs)+memstep);
-                temp(1:(end-memstep)) = confs;
-                confs = temp;
-            end
-            index = chunk;
-            % filename
-            len = fread(fid, 1, 'uint8');
-            fn = char( fread(fid, len, 'uchar')' );
-            % side
-            side = char( fread(fid, 4, 'uchar')' );
-            % x
-            x = fread(fid, 1, 'uint16');
-            % y
-            y = fread(fid, 1, 'uint16');
-            % opconf
-            
-            opconf = fread(fid, 1, 'int8');
-            fprintf(1, '  #%d: %s, %s (%d,%d) -- opconf = %d\n',...
-                index, fn, side, x, y, opconf);
-            % store values
-            confs(cnt) = opconf;
-            inds(cnt) = index;
-            cnt = cnt + 1;
-        end
-        
-        fclose(fid);
     end
 
 end
