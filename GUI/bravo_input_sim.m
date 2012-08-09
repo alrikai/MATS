@@ -324,6 +324,21 @@ while k <= k_end   % for each source image...
                 s_in_struct.sensor = sensor;
             end
             k = k + 1;
+        case 12 %NSWC Scrub (.PGM)
+            p_sfn = hi_sfnames{k};
+            s_sfn = hi_sfnames{k};
+            %read the .PGM datafile && associated gtf file
+            [p_in_struct, s_in_struct] = nswc_scrubbed_reader(...
+                [sd,filesep,filesep,hi_sfnames{k}],'PORT', gtf, TB_params);
+            
+            if ~isempty(p_in_struct)
+                p_in_struct.sensor = sensor;
+            end
+            if ~isempty(s_in_struct)
+                s_in_struct.sensor = sensor;
+            end
+            
+            k = k + 1;
         otherwise
             disp('Error: Invalid data format index.');
             return

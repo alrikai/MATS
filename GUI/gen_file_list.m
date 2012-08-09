@@ -143,6 +143,10 @@ switch frmt_index
          dir_struct = dir([sd, filesep,'*.mst']);
         hi_list = extract_names(dir_struct);
         lo_list = cell(length(hi_list),1);
+    case 12 %NSWC Scrub (.PGM)
+        dir_struct = dir([sd, filesep,'*.PGM']);
+        hi_list = extract_names(dir_struct);
+        lo_list = cell(length(hi_list),1);
     otherwise
         error('Unrecognized file format in file list generator.');
 end

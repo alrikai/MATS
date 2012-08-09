@@ -21,7 +21,7 @@ gui_vsn = '1.1.0'; gui_bdate = '29 Feb 2012';
 % Valid file formats (listed in drop down menu)
 file_formats = {'Old .mat (Bravo)', 'Mymat', 'Scrub .mat', 'NSWC .mat',...
     'HDF5', 'NURC .mat (MUSCLE)','CSDT', 'POND', 'PC SWAT Imagery .mat',...
-    'MATS input struct','MSTL .mst'};
+    'MATS input struct','MSTL .mst','NSWC Scrub .PGM'};
 % Valid sensor formats (listed in drop down menu)
 sensor_formats = {'ONR SSAM', 'ONR SSAM2', 'SSAM III', 'MUSCLE', 'EDGETECH', 'MK 18 mod 2', 'MARINESONIC'};
 
@@ -623,7 +623,7 @@ function saveconfig_clbk(junk, junk2)
     if sum(config_fn == 0) == 0
         config_vsn = 2;
         save([config_path, filesep, config_fn],...
-            'sensor', 'TB_params', 'config_vsn')
+            'sensor', 'TB_params', 'config_vsn', 'gt_file')
         if TB_params.TB_HEAVY_TEXT == 1
             fprintf(1,'Config. file %s saved.\n', config_fn);
         end

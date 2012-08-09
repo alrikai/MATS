@@ -49,18 +49,21 @@ while 0 == 0
             x_i = abs(x_i);
             fn_i = fscanf(gtf_id,'%s',1);
             
-        case 7 %ET
+        case {7,12} %ET and NSWC scrub (.PGM)
             [x_i,count] = fscanf(gtf_id,'%f',1);	% test for another line
             if count ~= 1, break; end               % no line exists
             y_i = fscanf(gtf_id,'%f',1);
             code_i = fscanf(gtf_id,'%s',1);
+            fn_i = fscanf(gtf_id,'%s',1);
             if x_i < 0
                 side_i = 'Port';
+                fn_i = strcat(fn_i, '_LEFT');
             else
                 side_i = 'Stbd';
+                fn_i = strcat(fn_i, '_RIGHT');
             end
             x_i = abs(x_i);
-            fn_i = fscanf(gtf_id,'%s',1);
+            
     end
     
     gt_data(1).xs = [gt_data.xs, x_i];
@@ -78,7 +81,7 @@ for k = 1:length(gt_data.fns)
     switch fmt_index
         case 1 % Bravo
             fname_gcore{k} = fname_gt(1:(end-8));
-        case {2,3,4,5,6,7,8,9,10}
+        case {2,3,4,5,6,7,8,9,10,12}
             fname_gcore{k} = fname_gt;
     end
 end
@@ -110,6 +113,13 @@ gt_data.fns = gt_data.fns(run_mask == 1);
 % gt_data.scores = gt_data.xs(run_mask == 1);
 gt_data.sides = gt_data.sides(run_mask == 1);
     
+%
+%   DEBUG - look @ the c_list matching. The side and gt fields are
+%   incorrect, and hence even contacts that match are flagged as not
+%   matching. 
+%
+dbstack;
+keyboard;
 
 % Define tolerances for what constitutes a match
 % x_tol = 2; y_tol = 2;
