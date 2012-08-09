@@ -50,8 +50,11 @@ while 0 == 0
             fn_i = fscanf(gtf_id,'%s',1);
             
         case {7,12} %ET and NSWC scrub (.PGM)
-            [x_i,count] = fscanf(gtf_id,'%f',1);	% test for another line
-            if count ~= 1, break; end               % no line exists
+            [x_i,count] = fscanf(gtf_id,'%f',1);	
+            % test for another line no line exists
+            if (count ~= 1)
+                break; 
+            end               
             y_i = fscanf(gtf_id,'%f',1);
             code_i = fscanf(gtf_id,'%s',1);
             fn_i = fscanf(gtf_id,'%s',1);
@@ -113,14 +116,6 @@ gt_data.fns = gt_data.fns(run_mask == 1);
 % gt_data.scores = gt_data.xs(run_mask == 1);
 gt_data.sides = gt_data.sides(run_mask == 1);
     
-%
-%   DEBUG - look @ the c_list matching. The side and gt fields are
-%   incorrect, and hence even contacts that match are flagged as not
-%   matching. 
-%
-dbstack;
-keyboard;
-
 % Define tolerances for what constitutes a match
 % x_tol = 2; y_tol = 2;
 x_tol = 5/ecdata.hf_cres; y_tol = 5/ecdata.hf_ares;
