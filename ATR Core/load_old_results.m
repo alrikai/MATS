@@ -46,6 +46,37 @@ for q = 1:length(new_contacts)
    
     split_mode = isfield(contacts,'ecdata_fn');
     if split_mode   % seperate files exist; load these into memory
+        
+        %
+        %   ALRIK - start of new addition
+        %
+        [ecdata_path,ecdata_fname,ecd_ext]=fileparts(contacts(q).ecdata_fn);
+        if(~isdir(ecdata_path))
+            if(q==1)
+                file_prepend_str = '/home/alrik/';
+                file_sep_loc = strfind(ecdata_path,filesep);
+                %remove the '/home/' part of the path
+                new_file_path = ecdata_path(file_sep_loc(2)+1:end);
+                ecdata_path = strcat(file_prepend_str, new_file_path);
+                contacts(q).ecdata_fn = strcat(ecdata_path, filesep, ecdata_fname, ecd_ext);
+
+                if(~exist(contacts(q).ecdata_fn,'file'))
+                    dbstack;
+                    keyboard;
+                    uidlg_str = sprintf('choose ecd file for %s', ecdata_fname);
+                    [filename, pathname, ~] = uigetfile(strcat('*',ecd_ext),uidlg_str); 
+                    contacts(q).ecdata_fn = strcat(pathname,filename);
+                end
+            else
+                %assuming they're all from the same directory...
+                [pathname, ~] = fileparts(contacts(q-1).ecdata_fn);
+                contacts(q).ecdata_fn = strcat(pathname,'/',ecdata_fname,'.ecd');
+            end
+        end
+        %
+        %   ALRIK - end of new addition
+        %
+        
         new_contacts(q).ecdata_fn   = contacts(q).ecdata_fn;
         
         temp = read_extra_cdata( contacts(q).ecdata_fn );
